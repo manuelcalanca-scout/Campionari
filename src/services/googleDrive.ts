@@ -68,42 +68,31 @@ class GoogleDriveService {
   async ensureImagesFolder(): Promise<string> {
     if (this.imagesFolderId) return this.imagesFolderId;
 
-    const appFolderId = await this.ensureAppFolder();
-
-    // Cerca la sottocartella images nella cartella/Team Drive
-    const queryParams: any = {
-      q: `name='images' and mimeType='application/vnd.google-apps.folder' and '${appFolderId}' in parents and trashed=false`,
-      fields: 'files(id, name)'
-    };
-
-    // Per Team Drive, aggiungi i parametri necessari
+    // Se stiamo usando un Team Drive, usa direttamente la sua root per le immagini
     if (SHARED_DRIVE_ID) {
-      queryParams.supportsAllDrives = true;
-      queryParams.includeItemsFromAllDrives = true;
-      queryParams.driveId = SHARED_DRIVE_ID;
-      queryParams.corpora = 'drive';
+      this.imagesFolderId = SHARED_DRIVE_ID;
+      return this.imagesFolderId;
     }
 
-    const response = await gapi.client.drive.files.list(queryParams);
+    // Altrimenti, per Drive personali, crea/cerca la sottocartella images
+    const appFolderId = await this.ensureAppFolder();
+
+    const response = await gapi.client.drive.files.list({
+      q: `name='images' and mimeType='application/vnd.google-apps.folder' and '${appFolderId}' in parents and trashed=false`,
+      fields: 'files(id, name)'
+    });
 
     const folders = response.result.files;
     if (folders && folders.length > 0) {
       this.imagesFolderId = folders[0].id!;
     } else {
-      const createParams: any = {
+      const createResponse = await gapi.client.drive.files.create({
         resource: {
           name: 'images',
           mimeType: 'application/vnd.google-apps.folder',
           parents: [appFolderId]
         }
-      };
-
-      // Per Drive condivisi, aggiungi il parametro supportAllDrives
-      if (SHARED_DRIVE_ID) {
-        createParams.supportsAllDrives = true;
-      }
-
-      const createResponse = await gapi.client.drive.files.create(createParams);
+      });
       this.imagesFolderId = createResponse.result.id!;
     }
 
@@ -244,7 +233,7 @@ class GoogleDriveService {
       body: bytes
     };
 
-    const response = await gapi.client.request({
+    const uploadParams: any = {
       path: 'https://www.googleapis.com/upload/drive/v3/files',
       method: 'POST',
       params: {
@@ -254,7 +243,13 @@ class GoogleDriveService {
         'Content-Type': 'multipart/related; boundary="foo_bar_baz"'
       },
       body: this.createMultipartBody(metadata, media, 'foo_bar_baz')
-    });
+    };
+
+    if (SHARED_DRIVE_ID) {
+      uploadParams.params.supportsAllDrives = true;
+    }
+
+    const response = await gapi.client.request(uploadParams);
 
     return response.result.id;
   }
