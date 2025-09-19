@@ -37,10 +37,37 @@ class GoogleDriveService {
 
     this.setAuthToken();
 
-    // Se è configurato un Drive condiviso, usa quello come parent
+    // Se è configurato un Drive condiviso (Team Drive), cerca/crea la cartella Campionari al suo interno
     if (SHARED_DRIVE_ID) {
-      // Se SHARED_DRIVE_ID è l'ID di una cartella condivisa, usala direttamente
-      this.appFolderId = SHARED_DRIVE_ID;
+      const queryParams: any = {
+        q: `name='${APP_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+        fields: 'files(id, name)',
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+        driveId: SHARED_DRIVE_ID,
+        corpora: 'drive'
+      };
+
+      const response = await gapi.client.drive.files.list(queryParams);
+      const folders = response.result.files;
+
+      if (folders && folders.length > 0) {
+        this.appFolderId = folders[0].id!;
+      } else {
+        // Crea la cartella nel Team Drive
+        const createParams: any = {
+          resource: {
+            name: APP_FOLDER_NAME,
+            mimeType: 'application/vnd.google-apps.folder',
+            parents: [SHARED_DRIVE_ID]
+          },
+          supportsAllDrives: true
+        };
+
+        const createResponse = await gapi.client.drive.files.create(createParams);
+        this.appFolderId = createResponse.result.id!;
+      }
+
       return this.appFolderId;
     }
 
@@ -203,10 +230,16 @@ class GoogleDriveService {
         return [];
       }
 
-      const fileResponse = await gapi.client.drive.files.get({
+      const getParams: any = {
         fileId: files[0].id!,
         alt: 'media'
-      });
+      };
+
+      if (SHARED_DRIVE_ID) {
+        getParams.supportsAllDrives = true;
+      }
+
+      const fileResponse = await gapi.client.drive.files.get(getParams);
 
       return JSON.parse(fileResponse.body);
     } catch (error) {
