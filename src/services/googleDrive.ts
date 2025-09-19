@@ -37,37 +37,9 @@ class GoogleDriveService {
 
     this.setAuthToken();
 
-    // Se è configurato un Drive condiviso (Team Drive), cerca/crea la cartella Campionari al suo interno
+    // Se è configurato un Drive condiviso (Team Drive), usa direttamente la sua root
     if (SHARED_DRIVE_ID) {
-      const queryParams: any = {
-        q: `name='${APP_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-        fields: 'files(id, name)',
-        supportsAllDrives: true,
-        includeItemsFromAllDrives: true,
-        driveId: SHARED_DRIVE_ID,
-        corpora: 'drive'
-      };
-
-      const response = await gapi.client.drive.files.list(queryParams);
-      const folders = response.result.files;
-
-      if (folders && folders.length > 0) {
-        this.appFolderId = folders[0].id!;
-      } else {
-        // Crea la cartella nel Team Drive
-        const createParams: any = {
-          resource: {
-            name: APP_FOLDER_NAME,
-            mimeType: 'application/vnd.google-apps.folder',
-            parents: [SHARED_DRIVE_ID]
-          },
-          supportsAllDrives: true
-        };
-
-        const createResponse = await gapi.client.drive.files.create(createParams);
-        this.appFolderId = createResponse.result.id!;
-      }
-
+      this.appFolderId = SHARED_DRIVE_ID;
       return this.appFolderId;
     }
 
@@ -98,16 +70,18 @@ class GoogleDriveService {
 
     const appFolderId = await this.ensureAppFolder();
 
-    // Se stiamo usando la cartella condivisa direttamente, crea la sottocartella images
+    // Cerca la sottocartella images nella cartella/Team Drive
     const queryParams: any = {
       q: `name='images' and mimeType='application/vnd.google-apps.folder' and '${appFolderId}' in parents and trashed=false`,
       fields: 'files(id, name)'
     };
 
-    // Per Drive condivisi, aggiungi il parametro supportAllDrives
+    // Per Team Drive, aggiungi i parametri necessari
     if (SHARED_DRIVE_ID) {
       queryParams.supportsAllDrives = true;
       queryParams.includeItemsFromAllDrives = true;
+      queryParams.driveId = SHARED_DRIVE_ID;
+      queryParams.corpora = 'drive';
     }
 
     const response = await gapi.client.drive.files.list(queryParams);
