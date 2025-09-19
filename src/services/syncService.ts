@@ -60,7 +60,17 @@ class SyncService {
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(suppliers));
       this.markPendingChanges();
       this.updateSyncStatus({ hasPendingChanges: true });
-      
+    } catch (error) {
+      console.error('Error saving suppliers locally:', error);
+    }
+  }
+
+  saveLocallyAndSync(suppliers: Supplier[]): void {
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(suppliers));
+      this.markPendingChanges();
+      this.updateSyncStatus({ hasPendingChanges: true });
+
       if (this.currentSyncStatus.isOnline && googleAuth.isUserSignedIn()) {
         this.syncToCloud();
       }

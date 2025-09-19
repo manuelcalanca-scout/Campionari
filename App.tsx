@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { SupplierListView } from './src/components/SupplierListView';
 import { SupplierDetailView } from './src/components/SupplierDetailView';
 import { AuthWrapper } from './src/components/AuthWrapper';
-import { syncService } from './src/services/syncService';
+import { syncService, type SyncStatus } from './src/services/syncService';
 import { generateUUID } from './src/utils/uuid';
 import type { Supplier, Item, ImageFile } from './src/types';
 
@@ -71,6 +71,7 @@ const AppContent: React.FC = () => {
   });
 
   const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>(syncService.getSyncStatus());
 
   const updateSuppliers = useCallback((updater: (prev: Supplier[]) => Supplier[]) => {
     setSuppliers(prev => {
@@ -79,7 +80,24 @@ const AppContent: React.FC = () => {
         return newSuppliers;
     });
   }, []);
-  
+
+  const handleSaveToCloud = useCallback(async () => {
+    try {
+      await syncService.forceSync();
+    } catch (error) {
+      console.error('Error saving to cloud:', error);
+      alert('Errore durante il salvataggio su Drive. Riprova.');
+    }
+  }, []);
+
+  // Listen to sync status changes
+  useEffect(() => {
+    const unsubscribe = syncService.onSyncStatusChange((status) => {
+      setSyncStatus(status);
+    });
+    return unsubscribe;
+  }, []);
+
   // Effect to ensure selection is cleared if the selected supplier is deleted
   useEffect(() => {
     if (selectedSupplierId && !suppliers.some(s => s.id === selectedSupplierId)) {
@@ -239,6 +257,32 @@ const AppContent: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div className="container mx-auto p-4 sm:p-6 lg:p-8">
+        {/* Header con pulsante Salva */}
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold text-gray-800">
+            Campionari
+          </h1>
+          <div className="flex items-center gap-4">
+            {/* Indicatore stato */}
+            <div className="text-sm">
+              {syncStatus.syncing ? (
+                <span className="text-blue-600">🔄 Sincronizzando...</span>
+              ) : syncStatus.hasPendingChanges ? (
+                <span className="text-orange-600">⚠️ Modifiche non salvate</span>
+              ) : (
+                <span className="text-green-600">✅ Sincronizzato</span>
+              )}
+            </div>
+            {/* Pulsante Salva */}
+            <button
+              onClick={handleSaveToCloud}
+              disabled={syncStatus.syncing || !syncStatus.hasPendingChanges}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >
+              {syncStatus.syncing ? 'Salvando...' : 'Salva su Drive'}
+            </button>
+          </div>
+        </div>
         {selectedSupplier ? (
           <SupplierDetailView
             key={selectedSupplier.id}
