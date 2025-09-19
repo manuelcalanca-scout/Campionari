@@ -113,3 +113,4 @@ I dati vengono salvati in:
 - Verifica che il sito sia servito tramite HTTPS (obbligatorio per PWA)
 - Controlla che il manifest.json sia accessibile
 - Assicurati che il service worker sia registrato correttamente
+# Updated Fri, Sep 19, 2025  2:12:19 PM
