@@ -274,35 +274,50 @@ class GoogleDriveService {
     this.setAuthToken();
 
     try {
-      const response = await gapi.client.drive.files.get({
-        fileId: fileId,
-        alt: 'media'
+      // Use XMLHttpRequest for better binary handling
+      const accessToken = gapi.auth.getToken().access_token;
+
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`);
+        xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`);
+        xhr.responseType = 'arraybuffer';
+
+        xhr.onload = () => {
+          if (xhr.status === 200) {
+            console.log('📥 XHR response:', {
+              status: xhr.status,
+              responseType: xhr.responseType,
+              bufferSize: xhr.response.byteLength
+            });
+
+            // Convert ArrayBuffer to base64
+            const arrayBuffer = xhr.response;
+            const uint8Array = new Uint8Array(arrayBuffer);
+
+            console.log('📥 First 10 bytes:', Array.from(uint8Array.slice(0, 10)));
+
+            // Convert to binary string
+            let binaryString = '';
+            for (let i = 0; i < uint8Array.length; i++) {
+              binaryString += String.fromCharCode(uint8Array[i]);
+            }
+
+            const base64Data = btoa(binaryString);
+            const dataUrl = `data:image/jpeg;base64,${base64Data}`;
+
+            console.log('📥 Base64 sample:', base64Data.substring(0, 50));
+            console.log('📥 Created dataUrl, length:', dataUrl.length, 'prefix:', dataUrl.substring(0, 50));
+
+            resolve(dataUrl);
+          } else {
+            reject(new Error(`HTTP error! status: ${xhr.status}`));
+          }
+        };
+
+        xhr.onerror = () => reject(new Error('Network error'));
+        xhr.send();
       });
-
-      console.log('📥 Drive response:', {
-        status: response.status,
-        bodyType: typeof response.body,
-        bodyLength: response.body?.length
-      });
-
-      // Debug the response body
-      console.log('📥 Response body sample:', response.body.substring(0, 20));
-      console.log('📥 Response body char codes (first 10):', Array.from(response.body.substring(0, 10)).map(c => c.charCodeAt(0)));
-
-      // Convert string to proper binary data for btoa
-      const binaryString = response.body;
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i) & 0xff; // Ensure byte value
-      }
-      const base64Data = btoa(String.fromCharCode(...bytes));
-      const dataUrl = `data:image/jpeg;base64,${base64Data}`;
-
-      console.log('📥 First 10 bytes:', Array.from(bytes.slice(0, 10)));
-      console.log('📥 Base64 sample:', base64Data.substring(0, 50));
-      console.log('📥 Created dataUrl, length:', dataUrl.length, 'prefix:', dataUrl.substring(0, 50));
-
-      return dataUrl;
     } catch (error) {
       console.error('📥 Download failed:', error);
       throw error;
