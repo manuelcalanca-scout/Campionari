@@ -315,6 +315,50 @@ class GoogleDriveService {
     }
   }
 
+  // Funzione per cancellare TUTTO da Google Drive (reset completo)
+  async deleteAllCloudData(): Promise<void> {
+    this.setAuthToken();
+    const appFolderId = await this.ensureAppFolder();
+
+    try {
+      // Lista tutti i file nella cartella (o Team Drive)
+      const queryParams: any = {
+        q: `'${appFolderId}' in parents and trashed=false`,
+        fields: 'files(id, name)'
+      };
+
+      if (SHARED_DRIVE_ID) {
+        queryParams.supportsAllDrives = true;
+        queryParams.includeItemsFromAllDrives = true;
+      }
+
+      const response = await gapi.client.drive.files.list(queryParams);
+      const files = response.result.files || [];
+
+      console.log(`🗑️ Deleting ${files.length} files from Drive...`);
+
+      // Cancella tutti i file
+      for (const file of files) {
+        try {
+          const deleteParams: any = { fileId: file.id };
+          if (SHARED_DRIVE_ID) {
+            deleteParams.supportsAllDrives = true;
+          }
+
+          await gapi.client.drive.files.delete(deleteParams);
+          console.log(`✓ Deleted: ${file.name}`);
+        } catch (error) {
+          console.error(`✗ Failed to delete ${file.name}:`, error);
+        }
+      }
+
+      console.log('🗑️ Drive cleanup completed');
+    } catch (error) {
+      console.error('Error during Drive cleanup:', error);
+      throw error;
+    }
+  }
+
   // Funzione per pulire immagini base64 rimaste (solo se hanno driveFileId)
   private forceCleanImageData(image: ImageFile): ImageFile {
     if (image.driveFileId && image.dataUrl) {

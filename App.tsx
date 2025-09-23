@@ -3,6 +3,8 @@ import { SupplierListView } from './src/components/SupplierListView';
 import { SupplierDetailView } from './src/components/SupplierDetailView';
 import { AuthWrapper } from './src/components/AuthWrapper';
 import { syncService, type SyncStatus } from './src/services/syncService';
+import { googleDrive } from './src/services/googleDrive';
+import { googleAuth } from './src/services/googleAuth';
 import { generateUUID } from './src/utils/uuid';
 import type { Supplier, Item, ImageFile } from './src/types';
 
@@ -87,6 +89,39 @@ const AppContent: React.FC = () => {
     } catch (error) {
       console.error('Error saving to cloud:', error);
       alert('Errore durante il salvataggio su Drive. Riprova.');
+    }
+  }, []);
+
+  const handleResetAll = useCallback(async () => {
+    const confirmed = confirm(
+      '⚠️ ATTENZIONE: Questa operazione cancellerà:\n\n' +
+      '• TUTTI i dati locali\n' +
+      '• TUTTI i file su Google Drive\n' +
+      '• Ricomincerà da zero\n\n' +
+      'Questa operazione è IRREVERSIBILE!\n\n' +
+      'Continuare?'
+    );
+
+    if (!confirmed) return;
+
+    try {
+      // 1. Cancella localStorage
+      localStorage.clear();
+
+      // 2. Reset ai dati iniziali localmente
+      setSuppliers(initialSuppliers);
+      syncService.saveLocally(initialSuppliers);
+
+      // 3. Cancella tutto da Google Drive (se autenticato)
+      if (googleAuth.isUserSignedIn()) {
+        console.log('🗑️ Cleaning Google Drive...');
+        await googleDrive.deleteAllCloudData();
+      }
+
+      alert('✅ Reset completato!\n\nTutti i dati locali e cloud sono stati cancellati.\nL\'app è stata ripulita completamente.');
+    } catch (error) {
+      console.error('Error during reset:', error);
+      alert('⚠️ Reset parzialmente completato.\n\nDati locali cancellati, ma errore nella pulizia di Google Drive.\nControlla la console per dettagli.');
     }
   }, []);
 
@@ -273,14 +308,23 @@ const AppContent: React.FC = () => {
                 <span className="text-green-600">✅ Sincronizzato</span>
               )}
             </div>
-            {/* Pulsante Salva */}
-            <button
-              onClick={handleSaveToCloud}
-              disabled={syncStatus.syncing || !syncStatus.hasPendingChanges}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-            >
-              {syncStatus.syncing ? 'Salvando...' : 'Salva su Drive'}
-            </button>
+            {/* Pulsanti */}
+            <div className="flex gap-2">
+              <button
+                onClick={handleSaveToCloud}
+                disabled={syncStatus.syncing || !syncStatus.hasPendingChanges}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                {syncStatus.syncing ? 'Salvando...' : 'Salva su Drive'}
+              </button>
+              <button
+                onClick={handleResetAll}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                title="Reset completo dei dati"
+              >
+                🗑️ Reset
+              </button>
+            </div>
           </div>
         </div>
         {selectedSupplier ? (
