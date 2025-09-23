@@ -23,6 +23,15 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ label, image, onIm
   const fileInputId = React.useId();
   const { dataUrl, isLoading, error } = useImageLoader(image);
 
+  // Debug forzato
+  console.log('🖼️ ImageUploader render:', {
+    label,
+    hasImage: !!image,
+    imageName: image?.name,
+    driveFileId: image?.driveFileId,
+    hookResult: { dataUrl: !!dataUrl, isLoading, error }
+  });
+
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     onImageSelect(file || null);
