@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Item } from '../types';
 import { TrashIcon, FolderOpenIcon } from './icons';
+import { ItemImage } from './ItemImage';
 
 interface ItemCardProps {
   item: Item;
@@ -133,18 +134,12 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item, index, onItemChange, o
           </div>
           <div className="grid grid-cols-4 gap-2">
               {item.images.map((image, idx) => (
-                  <div key={idx} className="relative group aspect-square">
-                      <img src={image.dataUrl} alt={image.name} className="w-full h-full object-cover rounded-md border border-gray-200" />
-                      <button
-                          onClick={() => onRemoveItemImage(item.id, idx)}
-                          className="absolute top-0.5 right-0.5 bg-red-600 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100"
-                          aria-label="Remove image"
-                      >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                      </button>
-                  </div>
+                  <ItemImage
+                      key={idx}
+                      image={image}
+                      alt={image.name}
+                      onRemove={() => onRemoveItemImage(item.id, idx)}
+                  />
               ))}
               <button
                   type="button"

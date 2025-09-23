@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import type { Supplier } from '../types';
+import type { Supplier, ImageFile } from '../types';
 import { Header } from './Header';
 import { ItemList } from './ItemList';
 import { Modal } from './Modal';
+import { googleDrive } from '../services/googleDrive';
 
 interface SupplierDetailViewProps {
   supplier: Supplier;
@@ -51,6 +52,44 @@ export const SupplierDetailView: React.FC<SupplierDetailViewProps> = ({
     setIsDeleteModalOpen(false);
   };
 
+  // Funzione per precaricare tutte le immagini prima dell'export
+  const preloadAllImages = async (supplier: Supplier): Promise<Supplier> => {
+    console.log('📤 Preloading images for Excel export...');
+
+    // Precarica business card
+    let businessCard = supplierWithImages.headerData.businessCard;
+    if (businessCard && businessCard.driveFileId && !businessCard.dataUrl) {
+      console.log('📤 Preloading business card:', businessCard.name);
+      businessCard = await googleDrive.loadImageData(businessCard);
+    }
+
+    // Precarica immagini degli item
+    const items = await Promise.all(
+      supplierWithImages.items.map(async (item) => {
+        const images = await Promise.all(
+          item.images.map(async (image) => {
+            if (image.driveFileId && !image.dataUrl) {
+              console.log('📤 Preloading item image:', image.name);
+              return await googleDrive.loadImageData(image);
+            }
+            return image;
+          })
+        );
+        return { ...item, images };
+      })
+    );
+
+    console.log('📤 All images preloaded for export');
+    return {
+      ...supplier,
+      headerData: {
+        ...supplierWithImages.headerData,
+        businessCard
+      },
+      items
+    };
+  };
+
   const handleExport = async () => {
     setIsExporting(true);
     try {
@@ -60,8 +99,11 @@ export const SupplierDetailView: React.FC<SupplierDetailViewProps> = ({
         return;
       }
 
+      // Precarica tutte le immagini prima dell'export
+      const supplierWithImages = await preloadAllImages(supplier);
+
       const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet(supplier.name.replace(/[\\/*?[\]:]/g, '').substring(0, 31));
+      const worksheet = workbook.addWorksheet(supplierWithImages.name.replace(/[\\/*?[\]:]/g, '').substring(0, 31));
 
       // --- STYLING ---
       const BOLD_STYLE = { font: { bold: true, size: 14 }, alignment: { vertical: 'middle' } };
@@ -143,7 +185,7 @@ export const SupplierDetailView: React.FC<SupplierDetailViewProps> = ({
       worksheet.getCell(`H${headerCurrentRow}`).value = 'DATE';
       worksheet.getCell(`H${headerCurrentRow}`).style = BOLD_STYLE;
       worksheet.mergeCells(`I${headerCurrentRow}:L${headerCurrentRow}`);
-      worksheet.getCell(`I${headerCurrentRow}`).value = supplier.headerData.date;
+      worksheet.getCell(`I${headerCurrentRow}`).value = supplierWithImages.headerData.date;
       worksheet.getCell(`I${headerCurrentRow}`).style = NORMAL_STYLE;
       worksheet.getCell(`L${headerCurrentRow}`).border = { bottom: DASHED_BLACK_BORDER };
 
@@ -151,20 +193,20 @@ export const SupplierDetailView: React.FC<SupplierDetailViewProps> = ({
       worksheet.getCell(`N${headerCurrentRow}`).style = { ...BOLD_STYLE, alignment: { ...BOLD_STYLE.alignment, horizontal: 'left' }};
       const tradingCheckbox = worksheet.getCell(`O${headerCurrentRow}`);
       tradingCheckbox.style = CHECKBOX_STYLE;
-      if (supplier.headerData.factoryType === 'TRADING') tradingCheckbox.value = '✓';
+      if (supplierWithImages.headerData.factoryType === 'TRADING') tradingCheckbox.value = '✓';
       
       headerCurrentRow++; // Row 3
       worksheet.getCell(`N${headerCurrentRow}`).value = 'FACTORY';
       worksheet.getCell(`N${headerCurrentRow}`).style = { ...BOLD_STYLE, alignment: { ...BOLD_STYLE.alignment, horizontal: 'left' }};
       const factoryCheckbox = worksheet.getCell(`O${headerCurrentRow}`);
       factoryCheckbox.style = CHECKBOX_STYLE;
-      if (supplier.headerData.factoryType === 'FACTORY') factoryCheckbox.value = '✓';
+      if (supplierWithImages.headerData.factoryType === 'FACTORY') factoryCheckbox.value = '✓';
 
       headerCurrentRow += 1; // Row 4: Booth - Reduced spacing as requested
       worksheet.getCell(`H${headerCurrentRow}`).value = 'BOOTH #';
       worksheet.getCell(`H${headerCurrentRow}`).style = BOLD_STYLE;
       worksheet.mergeCells(`I${headerCurrentRow}:M${headerCurrentRow}`);
-      worksheet.getCell(`I${headerCurrentRow}`).value = supplier.headerData.booth;
+      worksheet.getCell(`I${headerCurrentRow}`).value = supplierWithImages.headerData.booth;
       worksheet.getCell(`I${headerCurrentRow}`).style = NORMAL_STYLE;
       worksheet.getCell(`M${headerCurrentRow}`).border = { bottom: DASHED_BLACK_BORDER };
       
@@ -172,7 +214,7 @@ export const SupplierDetailView: React.FC<SupplierDetailViewProps> = ({
       worksheet.getCell(`H${headerCurrentRow}`).value = 'MADE IN';
       worksheet.getCell(`H${headerCurrentRow}`).style = BOLD_STYLE;
       worksheet.mergeCells(`I${headerCurrentRow}:M${headerCurrentRow}`);
-      worksheet.getCell(`I${headerCurrentRow}`).value = supplier.headerData.madeIn;
+      worksheet.getCell(`I${headerCurrentRow}`).value = supplierWithImages.headerData.madeIn;
       worksheet.getCell(`I${headerCurrentRow}`).style = NORMAL_STYLE;
       worksheet.getCell(`M${headerCurrentRow}`).border = { bottom: DASHED_BLACK_BORDER };
       
@@ -180,7 +222,7 @@ export const SupplierDetailView: React.FC<SupplierDetailViewProps> = ({
       worksheet.getCell(`H${headerCurrentRow}`).value = 'N. OF SAMPLES';
       worksheet.getCell(`H${headerCurrentRow}`).style = BOLD_STYLE;
       worksheet.mergeCells(`I${headerCurrentRow}:M${headerCurrentRow}`);
-      worksheet.getCell(`I${headerCurrentRow}`).value = supplier.headerData.numSamples;
+      worksheet.getCell(`I${headerCurrentRow}`).value = supplierWithImages.headerData.numSamples;
       worksheet.getCell(`I${headerCurrentRow}`).style = NORMAL_STYLE;
       worksheet.getCell(`M${headerCurrentRow}`).border = { bottom: DASHED_BLACK_BORDER };
 
@@ -188,7 +230,7 @@ export const SupplierDetailView: React.FC<SupplierDetailViewProps> = ({
       worksheet.getCell(`H${headerCurrentRow}`).value = 'SAMPLES ARRIVING DATE';
       worksheet.getCell(`H${headerCurrentRow}`).style = BOLD_STYLE;
       worksheet.mergeCells(`I${headerCurrentRow}:M${headerCurrentRow}`);
-      worksheet.getCell(`I${headerCurrentRow}`).value = supplier.headerData.samplesArrivingDate;
+      worksheet.getCell(`I${headerCurrentRow}`).value = supplierWithImages.headerData.samplesArrivingDate;
       worksheet.getCell(`I${headerCurrentRow}`).style = NORMAL_STYLE;
       worksheet.getCell(`M${headerCurrentRow}`).border = { bottom: DASHED_BLACK_BORDER };
       
@@ -198,14 +240,14 @@ export const SupplierDetailView: React.FC<SupplierDetailViewProps> = ({
 
       // Calculate and set dynamic height
       const headerNotesCharsPerLine = 85; // Approx chars for columns I-O
-      notesRow.height = calculateDynamicHeight(supplier.headerData.notes, headerNotesCharsPerLine);
+      notesRow.height = calculateDynamicHeight(supplierWithImages.headerData.notes, headerNotesCharsPerLine);
       
       worksheet.getCell(`H${notesRowNumber}`).value = 'NOTES';
       worksheet.getCell(`H${notesRowNumber}`).style = { ...BOLD_STYLE, alignment: { ...BOLD_STYLE.alignment, vertical: 'top' } };
       
       worksheet.mergeCells(`I${notesRowNumber}:O${notesRowNumber}`);
       const noteCell = worksheet.getCell(`I${notesRowNumber}`);
-      noteCell.value = supplier.headerData.notes;
+      noteCell.value = supplierWithImages.headerData.notes;
       noteCell.style = { 
           font: { size: 13 },
           alignment: { wrapText: true, vertical: 'top' }
@@ -218,10 +260,10 @@ export const SupplierDetailView: React.FC<SupplierDetailViewProps> = ({
       worksheet.getCell('A1').value = 'BUSINESS CARD';
       worksheet.getCell('A1').style = SECTION_HEADER_STYLE;
 
-      if (supplier.headerData.businessCard) {
+      if (supplierWithImages.headerData.businessCard) {
         const imageId = workbook.addImage({
-          base64: supplier.headerData.businessCard.dataUrl,
-          extension: supplier.headerData.businessCard.type.split('/')[1] || 'png',
+          base64: supplierWithImages.headerData.businessCard.dataUrl,
+          extension: supplierWithImages.headerData.businessCard.type.split('/')[1] || 'png',
         });
         worksheet.addImage(imageId, `A2:F${headerBlockEndRow}`);
       }
@@ -233,7 +275,7 @@ export const SupplierDetailView: React.FC<SupplierDetailViewProps> = ({
       let currentRow = headerBlockEndRow + 1;
 
       // --- ITEMS SECTION ---
-      for (const [index, item] of supplier.items.entries()) {
+      for (const [index, item] of supplierWithImages.items.entries()) {
         const itemStartRow = currentRow;
         // Separator
         worksheet.mergeCells(`A${itemStartRow}:P${itemStartRow}`);
@@ -331,7 +373,7 @@ export const SupplierDetailView: React.FC<SupplierDetailViewProps> = ({
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${supplier.name || 'supplier'}_spec_sheet.xlsx`;
+      a.download = `${supplierWithImages.name || 'supplier'}_spec_sheet.xlsx`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -359,7 +401,7 @@ export const SupplierDetailView: React.FC<SupplierDetailViewProps> = ({
         <Header
           supplierName={supplier.name}
           onSupplierNameChange={onSupplierNameChange}
-          data={supplier.headerData}
+          data={supplierWithImages.headerData}
           onChange={onHeaderChange}
           onBusinessCardChange={onBusinessCardChange}
           onBack={onBack}
@@ -368,7 +410,7 @@ export const SupplierDetailView: React.FC<SupplierDetailViewProps> = ({
           onDelete={handleDeleteClick}
         />
         <ItemList
-          items={supplier.items}
+          items={supplierWithImages.items}
           onItemChange={onItemChange}
           onAddItemImages={onAddItemImages}
           onRemoveItemImage={onRemoveItemImage}

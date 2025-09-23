@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { Supplier } from '../types';
 import { PlusIcon, BuildingStorefrontIcon, TrashIcon } from './icons';
 import { Modal } from './Modal';
+import { BusinessCardImage } from './BusinessCardImage';
 
 interface SupplierListViewProps {
   suppliers: Supplier[];
@@ -10,12 +11,6 @@ interface SupplierListViewProps {
   onRemoveSupplier: (id: string) => void;
 }
 
-const BusinessCardPlaceholder: React.FC = () => (
-    <div className="w-full h-full flex flex-col items-center justify-center bg-gray-100">
-        <BuildingStorefrontIcon />
-        <p className="mt-2 text-xs text-gray-500">No business card</p>
-    </div>
-);
 
 export const SupplierListView: React.FC<SupplierListViewProps> = ({ suppliers, onSelectSupplier, onAddSupplier, onRemoveSupplier }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -96,15 +91,10 @@ export const SupplierListView: React.FC<SupplierListViewProps> = ({ suppliers, o
                     <TrashIcon />
                 </button>
                 <div className="aspect-[16/9] w-full overflow-hidden">
-                  {supplier.headerData.businessCard ? (
-                    <img 
-                      src={supplier.headerData.businessCard.dataUrl} 
-                      alt={`${supplier.name} business card`}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                  ) : (
-                    <BusinessCardPlaceholder />
-                  )}
+                  <BusinessCardImage
+                    businessCard={supplier.headerData.businessCard}
+                    className="group-hover:scale-105 transition-transform duration-300"
+                  />
                 </div>
                 <h3 className="p-4 font-bold text-lg text-center text-gray-800 truncate">{supplier.name || 'Untitled Supplier'}</h3>
               </div>
