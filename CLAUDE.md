@@ -145,24 +145,74 @@ Item {
 - **Team Drive Fix**: Uso diretto root drive invece sottocartelle
 - **Build Compatibility**: Fix crypto.randomUUID() per production builds
 
-### 📋 Todo per Prossima Sessione
-1. **Migliorare UX Salvataggio**: L'utente preferisce un approccio diverso per il pulsante salva
-2. **Test Multi-User**: Verificare sincronizzazione con più utenti simultanei
-3. **Ottimizzazioni Performance**: Possibili miglioramenti UX/loading
+## 🚨 PROBLEMA CRITICO IN CORSO - Visualizzazione Immagini
+
+### 🔍 **Diagnosi Attuale (Sessione 23/09/2025)**
+**PROBLEMA**: Le immagini ottimizzate (separate da suppliers.json) non si visualizzano nell'app.
+
+**STATUS**:
+- ✅ Download da Google Drive funziona (54527 bytes, status 200)
+- ✅ Sistema lazy loading `useImageLoader` funziona
+- ✅ Componenti BusinessCardImage/ItemImage implementati correttamente
+- ❌ **ISSUE CRITICO**: Corruzione dati binari in tutti i metodi testati
+
+### 🔬 **Analisi Tecnica del Problema**
+**Causa Identificata**: Google Drive API restituisce dati binari corrotti indipendentemente dal metodo:
+
+1. **Bytes Ricevuti**: `[195, 191, 195, 152, 195, 191, 195, 160, 0, 16]`
+2. **Bytes JPEG Corretti**: Dovrebbero essere `[255, 216, 255, 224, ...]`
+3. **Corruzione**: I valori 195,191,195,152 indicano encoding UTF-8 di bytes binari
+4. **Base64 Risultante**: `w7/DmMO/w6AAEEpGSUYAAQEBAEg` (corrotto)
+
+### ❌ **Metodi Testati e Falliti**
+1. `gapi.client.drive.files.get()` con `alt: 'media'` - Dati UTF-8 corrotti
+2. `fetch()` con `response.blob()` - Stessi dati corrotti
+3. `XMLHttpRequest` con `responseType: 'arraybuffer'` - Ancora corrotti
+4. Conversioni manuali byte-by-byte con `& 0xff` - Non risolve il problema a monte
+
+### 🎯 **PROSSIMA SOLUZIONE DA IMPLEMENTARE**
+**Approccio URL Diretto** (evitare download binary):
+```typescript
+// Invece di scaricare e convertire
+const dataUrl = await downloadImage(fileId);
+
+// USARE URL PUBBLICO DIRETTO
+const publicUrl = `https://drive.google.com/uc?id=${fileId}&export=download`;
+// Impostare come src diretto dell'img tag
+```
+
+### 📋 **Todo Immediato - Prossima Sessione**
+1. **PRIORITÀ 1**: Implementare sistema URL diretto per immagini
+2. **PRIORITÀ 2**: Verificare permessi Google Drive per accesso pubblico
+3. **PRIORITÀ 3**: Se fallisce, considerare rollback completo al sistema base64
+4. **PRIORITÀ 4**: Se necessario, valutare servizio esterno per hosting immagini
+
+### 🔧 **Stato Codebase**
+- ✅ Tutti i componenti usano correttamente `useImageLoader`
+- ✅ Sistema di lazy loading implementato e funzionante
+- ✅ Errore `supplierWithImages` corretto in SupplierDetailView
+- ✅ Debug logging completo per troubleshooting
+- ✅ Gestione errori onError/onLoad su img tags
+- ❌ **BLOCCANTE**: Download binary da Google Drive non funziona
+
+### 🔄 **Opzione Rollback Pronta**
+Se il problema persiste, rollback al sistema originale:
+- Immagini base64 salvate direttamente in suppliers.json
+- File grande ma funzionante (4.7MB vs 50KB attuale)
+- Sistema provato e stabile
+
+### 💡 **Problemi Risolti in Questa Sessione**
+1. **Error JavaScript**: Corretto `supplierWithImages` undefined
+2. **Component Architecture**: Tutti i componenti usano hook lazy loading
+3. **Debug System**: Sistema logging completo implementato
+4. **Issue Identification**: Problema identificato con precisione (corruzione a monte)
 
 ### 🔧 Note Tecniche Importanti
-- **Sync Strategy**: Ora manuale invece che automatica per evitare conflitti
-- **Data Storage**: Team Drive root per `suppliers.json` e immagini
-- **Error Handling**: Gestione fallback per browser compatibility issues
-- **Mobile Support**: PWA installabile e funzionale offline
-
-### 💡 Problemi Risolti
-1. **Auth Deprecated**: Migrazione completa a Google Identity Services
-2. **Team Drive**: Configurazione corretta per accesso condiviso
-3. **Race Conditions**: Sync manuale previene perdita modifiche rapide
-4. **GitHub Pages**: Base path e deployment workflow funzionanti
-5. **UUID Generation**: Fallback per browser senza crypto.randomUUID()
+- **Sync Strategy**: Manuale, funziona correttamente
+- **Data Storage**: Team Drive root per `suppliers.json` (ora 50KB) e immagini separate
+- **Image System**: Architettura corretta ma bloccata da problema Google Drive
+- **Mobile Support**: PWA funzionale, solo immagini non visualizzate
 
 ---
 
-**Ultima Sessione**: Implementato sistema salvataggio manuale per risolvere problemi sincronizzazione. App completamente funzionale e deployata. Prossimo step: migliorare UX del pulsante salva secondo preferenze utente.
+**Ultima Sessione**: Identificato problema critico visualizzazione immagini. Causa: corruzione dati binari da Google Drive API. Prossimo step: implementare sistema URL diretto invece di download binary. Sistema ottimizzato pronto, solo questo ostacolo da superare.
