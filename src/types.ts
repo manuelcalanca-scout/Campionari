@@ -1,7 +1,16 @@
 export interface ImageFile {
-  dataUrl: string;
+  // Formato legacy: immagine base64 inline
+  dataUrl?: string;
+
+  // Formato ottimizzato: riferimento a file su Drive
+  driveFileId?: string;
+
+  // Proprietà comuni
   name: string;
   type: string;
+
+  // Flag per indicare se l'immagine è stata caricata da Drive
+  isLoaded?: boolean;
 }
 
 export interface Item {

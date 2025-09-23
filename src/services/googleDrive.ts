@@ -107,7 +107,22 @@ class GoogleDriveService {
 
     this.setAuthToken();
     const appFolderId = await this.ensureAppFolder();
-    const content = JSON.stringify(suppliers, null, 2);
+
+    // Analizza le dimensioni prima dell'ottimizzazione
+    const beforeAnalysis = this.analyzeSuppliersSize(suppliers);
+    console.log(`Before optimization: ${Math.round(beforeAnalysis.totalSize / 1024)}KB, ${beforeAnalysis.details}`);
+
+    // Prima ottimizza convertendo immagini base64 in file separati su Drive
+    console.log('Converting suppliers to optimized format...');
+    const optimizedSuppliers = await this.convertSuppliersToOptimized(suppliers);
+
+    // Poi prepara per il salvataggio rimuovendo dataUrl dai file già su Drive
+    const cleanSuppliers = this.prepareSuppliersForSaving(optimizedSuppliers);
+
+    const content = JSON.stringify(cleanSuppliers, null, 2);
+    const afterAnalysis = this.analyzeSuppliersSize(cleanSuppliers);
+    console.log(`After optimization: ${Math.round(afterAnalysis.totalSize / 1024)}KB, ${afterAnalysis.details}`);
+    console.log(`Saving suppliers.json (${Math.round(content.length / 1024)}KB) to Drive...`);
 
     const queryParams: any = {
       q: `name='${SUPPLIERS_FILE_NAME}' and '${appFolderId}' in parents and trashed=false`,
@@ -298,6 +313,136 @@ class GoogleDriveService {
       console.error('Error getting last modified time:', error);
       return null;
     }
+  }
+
+  // Funzione di debug per analizzare le dimensioni
+  analyzeSuppliersSize(suppliers: Supplier[]): { totalSize: number, imageCount: number, details: string } {
+    const json = JSON.stringify(suppliers, null, 2);
+    const totalSize = json.length;
+    let imageCount = 0;
+    let details = '';
+
+    suppliers.forEach(supplier => {
+      if (supplier.headerData.businessCard?.dataUrl) imageCount++;
+      supplier.items.forEach(item => {
+        imageCount += item.images.filter(img => img.dataUrl).length;
+      });
+    });
+
+    details = `Total suppliers: ${suppliers.length}, Images with dataUrl: ${imageCount}`;
+
+    return {
+      totalSize,
+      imageCount,
+      details
+    };
+  }
+
+  // Converte suppliers dal formato legacy a quello ottimizzato
+  async convertSuppliersToOptimized(suppliers: Supplier[]): Promise<Supplier[]> {
+    const optimizedSuppliers: Supplier[] = [];
+
+    for (const supplier of suppliers) {
+      const optimizedSupplier: Supplier = {
+        ...supplier,
+        headerData: {
+          ...supplier.headerData,
+          businessCard: supplier.headerData.businessCard
+            ? await this.convertImageToOptimized(supplier.headerData.businessCard, supplier.id, 'business-card')
+            : null
+        },
+        items: await Promise.all(supplier.items.map(async (item) => ({
+          ...item,
+          images: await Promise.all(item.images.map(async (image) =>
+            await this.convertImageToOptimized(image, supplier.id, 'item')
+          ))
+        })))
+      };
+
+      optimizedSuppliers.push(optimizedSupplier);
+    }
+
+    return optimizedSuppliers;
+  }
+
+  // Converte una singola immagine al formato ottimizzato
+  private async convertImageToOptimized(
+    image: ImageFile,
+    supplierId: string,
+    type: 'business-card' | 'item'
+  ): Promise<ImageFile> {
+    // Se già ottimizzata, ritorna così com'è
+    if (image.driveFileId) {
+      return image;
+    }
+
+    // Se ha dataUrl, caricala su Drive
+    if (image.dataUrl) {
+      try {
+        const driveFileId = await this.uploadImage(image, supplierId, type);
+        return {
+          name: image.name,
+          type: image.type,
+          driveFileId: driveFileId,
+          isLoaded: false
+        };
+      } catch (error) {
+        console.error('Error uploading image to Drive:', error);
+        // Fallback: mantieni il formato originale
+        return image;
+      }
+    }
+
+    return image;
+  }
+
+  // Carica i dati dell'immagine quando necessario
+  async loadImageData(image: ImageFile): Promise<ImageFile> {
+    if (image.dataUrl || !image.driveFileId) {
+      return image; // Già caricata o formato legacy
+    }
+
+    if (image.isLoaded) {
+      return image; // Già caricata in questa sessione
+    }
+
+    try {
+      const dataUrl = await this.downloadImage(image.driveFileId);
+      return {
+        ...image,
+        dataUrl: dataUrl,
+        isLoaded: true
+      };
+    } catch (error) {
+      console.error('Error loading image from Drive:', error);
+      return image;
+    }
+  }
+
+  // Prepara suppliers per il salvataggio (rimuove dataUrl se presente driveFileId)
+  private prepareSuppliersForSaving(suppliers: Supplier[]): Supplier[] {
+    return suppliers.map(supplier => ({
+      ...supplier,
+      headerData: {
+        ...supplier.headerData,
+        businessCard: supplier.headerData.businessCard
+          ? this.stripImageDataUrl(supplier.headerData.businessCard)
+          : null
+      },
+      items: supplier.items.map(item => ({
+        ...item,
+        images: item.images.map(image => this.stripImageDataUrl(image))
+      }))
+    }));
+  }
+
+  private stripImageDataUrl(image: ImageFile): ImageFile {
+    if (image.driveFileId) {
+      // Se ha driveFileId, rimuovi dataUrl per ridurre dimensioni
+      const { dataUrl, isLoaded, ...cleanImage } = image;
+      return cleanImage;
+    }
+    return image;
   }
 
   private createMultipartBody(metadata: any, media: any, boundary: string): string {

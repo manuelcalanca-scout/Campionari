@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import type { ImageFile } from '../types';
 import { CameraIcon } from './icons';
+import { useImageLoader } from '../hooks/useImageLoader';
 
 interface ImageUploaderProps {
   label: string;
@@ -20,6 +21,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ label, image, onIm
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const fileInputId = React.useId();
+  const { dataUrl, isLoading, error } = useImageLoader(image);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -65,7 +67,25 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ label, image, onIm
             />
             {image ? (
                 <>
-                    <img src={image.dataUrl} alt={image.name} className="w-full h-full object-contain p-1" />
+                    {isLoading ? (
+                        <div className="w-full h-full flex items-center justify-center">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                            <span className="ml-2 text-sm text-gray-500">Loading image...</span>
+                        </div>
+                    ) : error ? (
+                        <div className="w-full h-full flex items-center justify-center">
+                            <div className="text-center">
+                                <ImageIcon />
+                                <p className="text-sm text-red-500 mt-2">{error}</p>
+                            </div>
+                        </div>
+                    ) : dataUrl ? (
+                        <img src={dataUrl} alt={image.name} className="w-full h-full object-contain p-1" />
+                    ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                            <ImageIcon />
+                        </div>
+                    )}
                     <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center gap-4 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button 
                             type="button" 
