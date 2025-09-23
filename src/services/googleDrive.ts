@@ -315,6 +315,16 @@ class GoogleDriveService {
     }
   }
 
+  // Funzione per pulire immagini base64 rimaste (solo se hanno driveFileId)
+  private forceCleanImageData(image: ImageFile): ImageFile {
+    if (image.driveFileId && image.dataUrl) {
+      console.log(`Force cleaning dataUrl from ${image.name} (has driveFileId: ${image.driveFileId})`);
+      const { dataUrl, isLoaded, ...cleanImage } = image;
+      return cleanImage;
+    }
+    return image;
+  }
+
   // Funzione di debug per analizzare le dimensioni
   analyzeSuppliersSize(suppliers: Supplier[]): { totalSize: number, imageCount: number, details: string } {
     const json = JSON.stringify(suppliers, null, 2);
@@ -378,8 +388,10 @@ class GoogleDriveService {
 
     // Se ha dataUrl, caricala su Drive
     if (image.dataUrl) {
+      console.log(`Converting image ${image.name} to Drive...`);
       try {
         const driveFileId = await this.uploadImage(image, supplierId, type);
+        console.log(`✓ Converted ${image.name} → Drive file ${driveFileId}`);
         return {
           name: image.name,
           type: image.type,
@@ -387,9 +399,23 @@ class GoogleDriveService {
           isLoaded: false
         };
       } catch (error) {
-        console.error('Error uploading image to Drive:', error);
-        // Fallback: mantieni il formato originale
-        return image;
+        console.error(`✗ Failed to convert ${image.name}:`, error);
+        // Invece di fallback, riprova una volta
+        try {
+          console.log(`Retrying conversion of ${image.name}...`);
+          const driveFileId = await this.uploadImage(image, supplierId, type);
+          console.log(`✓ Retry successful: ${image.name} → Drive file ${driveFileId}`);
+          return {
+            name: image.name,
+            type: image.type,
+            driveFileId: driveFileId,
+            isLoaded: false
+          };
+        } catch (retryError) {
+          console.error(`✗ Retry failed for ${image.name}:`, retryError);
+          // Solo ora usa fallback
+          return image;
+        }
       }
     }
 
@@ -437,12 +463,15 @@ class GoogleDriveService {
   }
 
   private stripImageDataUrl(image: ImageFile): ImageFile {
-    if (image.driveFileId) {
+    // Prima forza pulizia se esistono entrambi
+    const cleanedImage = this.forceCleanImageData(image);
+
+    if (cleanedImage.driveFileId) {
       // Se ha driveFileId, rimuovi dataUrl per ridurre dimensioni
-      const { dataUrl, isLoaded, ...cleanImage } = image;
+      const { dataUrl, isLoaded, ...cleanImage } = cleanedImage;
       return cleanImage;
     }
-    return image;
+    return cleanedImage;
   }
 
   private createMultipartBody(metadata: any, media: any, boundary: string): string {
