@@ -45,9 +45,12 @@ export const BusinessCardImage: React.FC<BusinessCardImageProps> = ({ businessCa
   }
 
   if (!dataUrl) {
+    // TEST: Show a simple test image to verify img tag works
+    const testImage = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzAwNzBmMyIvPjx0ZXh0IHg9IjUwIiB5PSI1NSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE0IiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+VEVTVDI8L3RleHQ+PC9zdmc+";
+
     return (
       <div className={`w-full h-full flex flex-col items-center justify-center bg-gray-100 ${className}`}>
-        <BuildingStorefrontIcon />
+        <img src={testImage} alt="test" className="w-16 h-16 mb-2" />
         <p className="mt-2 text-xs text-gray-500">No image data</p>
       </div>
     );
@@ -58,6 +61,13 @@ export const BusinessCardImage: React.FC<BusinessCardImageProps> = ({ businessCa
       src={dataUrl}
       alt={businessCard.name}
       className={`w-full h-full object-contain ${className}`}
+      onError={(e) => {
+        console.error('🖼️ Image failed to load:', e);
+        console.error('🖼️ Failed dataUrl:', dataUrl.substring(0, 100));
+      }}
+      onLoad={() => {
+        console.log('🖼️ Image loaded successfully:', businessCard.name);
+      }}
     />
   );
 };

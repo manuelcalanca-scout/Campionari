@@ -309,6 +309,18 @@ class GoogleDriveService {
             console.log('📥 Base64 sample:', base64Data.substring(0, 50));
             console.log('📥 Created dataUrl, length:', dataUrl.length, 'prefix:', dataUrl.substring(0, 50));
 
+            // Validate base64
+            const isValidBase64 = /^[A-Za-z0-9+/]*={0,2}$/.test(base64Data);
+            console.log('📥 Base64 validation:', isValidBase64);
+
+            // Try to decode and re-encode to test validity
+            try {
+              const testDecode = atob(base64Data.substring(0, 100));
+              console.log('📥 Base64 decode test: SUCCESS, first 10 bytes:', Array.from(testDecode.substring(0, 10)).map(c => c.charCodeAt(0)));
+            } catch (e) {
+              console.error('📥 Base64 decode test: FAILED', e);
+            }
+
             resolve(dataUrl);
           } else {
             reject(new Error(`HTTP error! status: ${xhr.status}`));
