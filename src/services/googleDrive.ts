@@ -270,13 +270,28 @@ class GoogleDriveService {
   }
 
   async downloadImage(fileId: string): Promise<string> {
+    console.log('📥 Downloading image from Drive, fileId:', fileId);
     this.setAuthToken();
-    const response = await gapi.client.drive.files.get({
-      fileId: fileId,
-      alt: 'media'
-    });
 
-    return `data:image/jpeg;base64,${btoa(response.body)}`;
+    try {
+      const response = await gapi.client.drive.files.get({
+        fileId: fileId,
+        alt: 'media'
+      });
+
+      console.log('📥 Drive response:', {
+        status: response.status,
+        bodyType: typeof response.body,
+        bodyLength: response.body?.length
+      });
+
+      const dataUrl = `data:image/jpeg;base64,${btoa(response.body)}`;
+      console.log('📥 Created dataUrl, length:', dataUrl.length);
+      return dataUrl;
+    } catch (error) {
+      console.error('📥 Download failed:', error);
+      throw error;
+    }
   }
 
   async deleteImage(fileId: string): Promise<void> {
