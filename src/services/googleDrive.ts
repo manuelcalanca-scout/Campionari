@@ -285,8 +285,16 @@ class GoogleDriveService {
         bodyLength: response.body?.length
       });
 
-      const dataUrl = `data:image/jpeg;base64,${btoa(response.body)}`;
-      console.log('📥 Created dataUrl, length:', dataUrl.length);
+      // Debug the response body
+      console.log('📥 Response body sample:', response.body.substring(0, 100));
+      console.log('📥 Response body char codes (first 10):', Array.from(response.body.substring(0, 10)).map(c => c.charCodeAt(0)));
+
+      const base64Data = btoa(response.body);
+      const dataUrl = `data:image/jpeg;base64,${base64Data}`;
+
+      console.log('📥 Base64 sample:', base64Data.substring(0, 50));
+      console.log('📥 Created dataUrl, length:', dataUrl.length, 'prefix:', dataUrl.substring(0, 50));
+
       return dataUrl;
     } catch (error) {
       console.error('📥 Download failed:', error);

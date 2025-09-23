@@ -57,7 +57,7 @@ export const SupplierDetailView: React.FC<SupplierDetailViewProps> = ({
     console.log('📤 Preloading images for Excel export...');
 
     // Precarica business card
-    let businessCard = supplierWithImages.headerData.businessCard;
+    let businessCard = supplier.headerData.businessCard;
     if (businessCard && businessCard.driveFileId && !businessCard.dataUrl) {
       console.log('📤 Preloading business card:', businessCard.name);
       businessCard = await googleDrive.loadImageData(businessCard);
@@ -65,7 +65,7 @@ export const SupplierDetailView: React.FC<SupplierDetailViewProps> = ({
 
     // Precarica immagini degli item
     const items = await Promise.all(
-      supplierWithImages.items.map(async (item) => {
+      supplier.items.map(async (item) => {
         const images = await Promise.all(
           item.images.map(async (image) => {
             if (image.driveFileId && !image.dataUrl) {
@@ -83,7 +83,7 @@ export const SupplierDetailView: React.FC<SupplierDetailViewProps> = ({
     return {
       ...supplier,
       headerData: {
-        ...supplierWithImages.headerData,
+        ...supplier.headerData,
         businessCard
       },
       items
