@@ -92,6 +92,22 @@ const AppContent: React.FC = () => {
     }
   }, []);
 
+  const handleMakeImagesPublic = useCallback(async () => {
+    if (!googleAuth.isUserSignedIn()) {
+      alert('Devi essere autenticato per questa operazione.');
+      return;
+    }
+
+    try {
+      console.log('🔓 Making all images public...');
+      await googleDrive.makeAllImagesPublic();
+      alert('✅ Tutte le immagini sono ora pubblicamente accessibili!');
+    } catch (error) {
+      console.error('Error making images public:', error);
+      alert('Errore durante il processo. Controlla la console.');
+    }
+  }, []);
+
   const handleResetAll = useCallback(async () => {
     const confirmed = confirm(
       '⚠️ ATTENZIONE: Questa operazione cancellerà:\n\n' +
@@ -316,6 +332,13 @@ const AppContent: React.FC = () => {
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
                 {syncStatus.syncing ? 'Salvando...' : 'Salva su Drive'}
+              </button>
+              <button
+                onClick={handleMakeImagesPublic}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                title="Rendi pubbliche tutte le immagini"
+              >
+                🔓 Abilita Immagini
               </button>
               <button
                 onClick={handleResetAll}

@@ -44,31 +44,15 @@ export const useImageLoader = (image: ImageFile | null): ImageLoaderState => {
       return;
     }
 
-    // Se ha driveFileId, caricala da Drive
-    console.log('🖼️ Loading from Drive:', image.name, 'ID:', image.driveFileId);
-    setState(prev => ({ ...prev, isLoading: true, error: null }));
+    // Se ha driveFileId, usa URL diretto da Google Drive
+    console.log('🖼️ Using direct Drive URL:', image.name, 'ID:', image.driveFileId);
+    const directUrl = `https://drive.google.com/uc?id=${image.driveFileId}&export=download`;
 
-    googleDrive.loadImageData(image)
-      .then(loadedImage => {
-        console.log('🖼️ Drive load result:', {
-          name: image.name,
-          success: !!loadedImage.dataUrl,
-          dataUrlLength: loadedImage.dataUrl?.length
-        });
-        setState({
-          dataUrl: loadedImage.dataUrl || null,
-          isLoading: false,
-          error: loadedImage.dataUrl ? null : 'Failed to load image data'
-        });
-      })
-      .catch(error => {
-        console.error('🖼️ Error loading image:', image.name, error);
-        setState({
-          dataUrl: null,
-          isLoading: false,
-          error: 'Failed to load image'
-        });
-      });
+    setState({
+      dataUrl: directUrl,
+      isLoading: false,
+      error: null
+    });
   }, [image?.driveFileId, image?.dataUrl]);
 
   return state;

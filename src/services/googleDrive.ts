@@ -265,8 +265,12 @@ class GoogleDriveService {
     }
 
     const response = await gapi.client.request(uploadParams);
+    const fileId = response.result.id;
 
-    return response.result.id;
+    // Rendi il file pubblicamente accessibile per URL diretti
+    await this.makeFilePublic(fileId);
+
+    return fileId;
   }
 
   async downloadImage(fileId: string): Promise<string> {
@@ -336,6 +340,32 @@ class GoogleDriveService {
     }
   }
 
+  async makeFilePublic(fileId: string): Promise<void> {
+    try {
+      const permissionParams: any = {
+        path: `https://www.googleapis.com/drive/v3/files/${fileId}/permissions`,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          role: 'reader',
+          type: 'anyone'
+        })
+      };
+
+      if (SHARED_DRIVE_ID) {
+        permissionParams.params = { supportsAllDrives: true };
+      }
+
+      await gapi.client.request(permissionParams);
+      console.log(`✓ Made file ${fileId} publicly accessible`);
+    } catch (error) {
+      console.error(`Failed to make file ${fileId} public:`, error);
+      // Non bloccare l'upload se i permessi falliscono
+    }
+  }
+
   async deleteImage(fileId: string): Promise<void> {
     this.setAuthToken();
     await gapi.client.drive.files.delete({
@@ -369,6 +399,45 @@ class GoogleDriveService {
     } catch (error) {
       console.error('Error getting last modified time:', error);
       return null;
+    }
+  }
+
+  // Funzione per rendere pubblici tutti i file immagine esistenti
+  async makeAllImagesPublic(): Promise<void> {
+    this.setAuthToken();
+    const appFolderId = await this.ensureAppFolder();
+
+    try {
+      // Lista tutti i file immagine nella cartella (o Team Drive)
+      const queryParams: any = {
+        q: `'${appFolderId}' in parents and (mimeType contains 'image/' or name contains '.jpg' or name contains '.png' or name contains '.jpeg') and trashed=false`,
+        fields: 'files(id, name)'
+      };
+
+      if (SHARED_DRIVE_ID) {
+        queryParams.supportsAllDrives = true;
+        queryParams.includeItemsFromAllDrives = true;
+      }
+
+      const response = await gapi.client.drive.files.list(queryParams);
+      const files = response.result.files || [];
+
+      console.log(`🔓 Making ${files.length} image files public...`);
+
+      // Rendi pubblici tutti i file immagine
+      for (const file of files) {
+        try {
+          await this.makeFilePublic(file.id);
+          console.log(`✓ Made public: ${file.name}`);
+        } catch (error) {
+          console.error(`✗ Failed to make public ${file.name}:`, error);
+        }
+      }
+
+      console.log('🔓 All images made public');
+    } catch (error) {
+      console.error('Error making images public:', error);
+      throw error;
     }
   }
 
