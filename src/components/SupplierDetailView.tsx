@@ -92,15 +92,16 @@ export const SupplierDetailView: React.FC<SupplierDetailViewProps> = ({
 
   const handleExport = async () => {
     setIsExporting(true);
+
+    // Precarica tutte le immagini prima dell'export (fuori dal try block)
+    const supplierWithImages = await preloadAllImages(supplier);
+
     try {
       if (typeof ExcelJS === 'undefined') {
         alert('ExcelJS library not loaded. Please check your internet connection and try again.');
         setIsExporting(false);
         return;
       }
-
-      // Precarica tutte le immagini prima dell'export
-      const supplierWithImages = await preloadAllImages(supplier);
 
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet(supplierWithImages.name.replace(/[\\/*?[\]:]/g, '').substring(0, 31));

@@ -11,7 +11,8 @@ declare global {
 const gapi = window.gapi;
 
 const APP_FOLDER_NAME = 'Campionari';
-const SUPPLIERS_INDEX_FILE_NAME = 'suppliers-index.json';
+const SUPPLIERS_FILE_NAME = 'suppliers.json'; // Legacy filename
+const SUPPLIERS_INDEX_FILE_NAME = 'suppliers-index.json'; // New architecture
 const SHARED_DRIVE_ID = import.meta.env.VITE_SHARED_DRIVE_ID;
 
 // Nuova architettura: JSON separati per ogni fornitore
