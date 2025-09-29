@@ -11,8 +11,19 @@ declare global {
 const gapi = window.gapi;
 
 const APP_FOLDER_NAME = 'Campionari';
-const SUPPLIERS_FILE_NAME = 'suppliers.json';
+const SUPPLIERS_INDEX_FILE_NAME = 'suppliers-index.json';
 const SHARED_DRIVE_ID = import.meta.env.VITE_SHARED_DRIVE_ID;
+
+// Nuova architettura: JSON separati per ogni fornitore
+interface SupplierIndex {
+  suppliers: {
+    id: string;
+    name: string;
+    lastModified: string;
+    fileId?: string; // ID del file supplier-{id}.json su Drive
+  }[];
+  lastUpdated: string;
+}
 
 export interface DriveFile {
   id: string;
@@ -98,6 +109,215 @@ class GoogleDriveService {
 
     return this.imagesFolderId;
   }
+
+  // === NUOVE FUNZIONI PER ARCHITETTURA JSON SEPARATI ===
+
+  async loadSuppliersIndex(): Promise<SupplierIndex> {
+    try {
+      this.setAuthToken();
+      const appFolderId = await this.ensureAppFolder();
+
+      const queryParams: any = {
+        q: `name='${SUPPLIERS_INDEX_FILE_NAME}' and '${appFolderId}' in parents and trashed=false`,
+        fields: 'files(id)'
+      };
+
+      if (SHARED_DRIVE_ID) {
+        queryParams.supportsAllDrives = true;
+        queryParams.includeItemsFromAllDrives = true;
+      }
+
+      const response = await gapi.client.drive.files.list(queryParams);
+      const files = response.result.files;
+
+      if (!files || files.length === 0) {
+        // File indice non esiste, crea uno vuoto
+        const emptyIndex: SupplierIndex = {
+          suppliers: [],
+          lastUpdated: new Date().toISOString()
+        };
+        return emptyIndex;
+      }
+
+      const getParams: any = {
+        fileId: files[0].id!,
+        alt: 'media'
+      };
+
+      if (SHARED_DRIVE_ID) {
+        getParams.supportsAllDrives = true;
+      }
+
+      const fileResponse = await gapi.client.drive.files.get(getParams);
+      return JSON.parse(fileResponse.body);
+    } catch (error) {
+      console.error('Error loading suppliers index:', error);
+      return {
+        suppliers: [],
+        lastUpdated: new Date().toISOString()
+      };
+    }
+  }
+
+  async saveSuppliersIndex(index: SupplierIndex): Promise<void> {
+    this.setAuthToken();
+    const appFolderId = await this.ensureAppFolder();
+
+    const content = JSON.stringify(index, null, 2);
+    console.log(`Saving suppliers index (${Math.round(content.length / 1024)}KB)...`);
+
+    const queryParams: any = {
+      q: `name='${SUPPLIERS_INDEX_FILE_NAME}' and '${appFolderId}' in parents and trashed=false`,
+      fields: 'files(id)'
+    };
+
+    if (SHARED_DRIVE_ID) {
+      queryParams.supportsAllDrives = true;
+      queryParams.includeItemsFromAllDrives = true;
+    }
+
+    const response = await gapi.client.drive.files.list(queryParams);
+    const files = response.result.files;
+    const metadata = {
+      name: SUPPLIERS_INDEX_FILE_NAME,
+      parents: [appFolderId]
+    };
+
+    if (files && files.length > 0) {
+      // Update esistente
+      const updateParams: any = {
+        path: `https://www.googleapis.com/upload/drive/v3/files/${files[0].id}`,
+        method: 'PATCH',
+        params: { uploadType: 'media' },
+        headers: { 'Content-Type': 'application/json' },
+        body: content
+      };
+
+      if (SHARED_DRIVE_ID) {
+        updateParams.params.supportsAllDrives = true;
+      }
+
+      await gapi.client.request(updateParams);
+    } else {
+      // Crea nuovo
+      const createParams: any = {
+        path: 'https://www.googleapis.com/upload/drive/v3/files',
+        method: 'POST',
+        params: { uploadType: 'multipart' },
+        headers: { 'Content-Type': 'multipart/related; boundary="foo_bar_baz"' },
+        body: this.createMultipartBody(metadata, { mimeType: 'application/json', body: content }, 'foo_bar_baz')
+      };
+
+      if (SHARED_DRIVE_ID) {
+        createParams.params.supportsAllDrives = true;
+      }
+
+      await gapi.client.request(createParams);
+    }
+  }
+
+  async loadSingleSupplier(supplierId: string): Promise<Supplier | null> {
+    try {
+      this.setAuthToken();
+      const appFolderId = await this.ensureAppFolder();
+
+      const fileName = `supplier-${supplierId}.json`;
+      const queryParams: any = {
+        q: `name='${fileName}' and '${appFolderId}' in parents and trashed=false`,
+        fields: 'files(id)'
+      };
+
+      if (SHARED_DRIVE_ID) {
+        queryParams.supportsAllDrives = true;
+        queryParams.includeItemsFromAllDrives = true;
+      }
+
+      const response = await gapi.client.drive.files.list(queryParams);
+      const files = response.result.files;
+
+      if (!files || files.length === 0) {
+        console.log(`Supplier file ${fileName} not found`);
+        return null;
+      }
+
+      const getParams: any = {
+        fileId: files[0].id!,
+        alt: 'media'
+      };
+
+      if (SHARED_DRIVE_ID) {
+        getParams.supportsAllDrives = true;
+      }
+
+      const fileResponse = await gapi.client.drive.files.get(getParams);
+      const supplier = JSON.parse(fileResponse.body);
+      console.log(`✓ Loaded supplier ${supplier.name} (${Math.round(fileResponse.body.length / 1024)}KB)`);
+      return supplier;
+    } catch (error) {
+      console.error(`Error loading supplier ${supplierId}:`, error);
+      return null;
+    }
+  }
+
+  async saveSingleSupplier(supplier: Supplier): Promise<void> {
+    this.setAuthToken();
+    const appFolderId = await this.ensureAppFolder();
+
+    const fileName = `supplier-${supplier.id}.json`;
+    const content = JSON.stringify(supplier, null, 2);
+    console.log(`Saving ${supplier.name} (${Math.round(content.length / 1024)}KB)...`);
+
+    const queryParams: any = {
+      q: `name='${fileName}' and '${appFolderId}' in parents and trashed=false`,
+      fields: 'files(id)'
+    };
+
+    if (SHARED_DRIVE_ID) {
+      queryParams.supportsAllDrives = true;
+      queryParams.includeItemsFromAllDrives = true;
+    }
+
+    const response = await gapi.client.drive.files.list(queryParams);
+    const files = response.result.files;
+    const metadata = {
+      name: fileName,
+      parents: [appFolderId]
+    };
+
+    if (files && files.length > 0) {
+      // Update esistente
+      const updateParams: any = {
+        path: `https://www.googleapis.com/upload/drive/v3/files/${files[0].id}`,
+        method: 'PATCH',
+        params: { uploadType: 'media' },
+        headers: { 'Content-Type': 'application/json' },
+        body: content
+      };
+
+      if (SHARED_DRIVE_ID) {
+        updateParams.params.supportsAllDrives = true;
+      }
+
+      await gapi.client.request(updateParams);
+    } else {
+      // Crea nuovo
+      const createParams: any = {
+        path: 'https://www.googleapis.com/upload/drive/v3/files',
+        method: 'POST',
+        params: { uploadType: 'multipart' },
+        headers: { 'Content-Type': 'multipart/related; boundary="foo_bar_baz"' },
+        body: this.createMultipartBody(metadata, { mimeType: 'application/json', body: content }, 'foo_bar_baz')
+      };
+
+      if (SHARED_DRIVE_ID) {
+        createParams.params.supportsAllDrives = true;
+      }
+
+      await gapi.client.request(createParams);
+    }
+  }
+
+  // === FUNZIONI LEGACY (MANTENIAMO PER COMPATIBILITÀ) ===
 
   async saveSuppliers(suppliers: Supplier[]): Promise<void> {
     // Verifica che gapi sia inizializzato
@@ -185,6 +405,64 @@ class GoogleDriveService {
       await gapi.client.request(createParams);
     }
   }
+
+  // === NUOVE FUNZIONI HIGH-LEVEL PER IL NUOVO SISTEMA ===
+
+  async loadSuppliersNew(): Promise<Supplier[]> {
+    console.log('📚 Loading suppliers with new architecture...');
+    try {
+      // 1. Carica l'indice
+      const index = await this.loadSuppliersIndex();
+      console.log(`📋 Index loaded: ${index.suppliers.length} suppliers`);
+
+      // 2. Carica tutti i fornitori individuali
+      const suppliers: Supplier[] = [];
+      for (const supplierRef of index.suppliers) {
+        console.log(`📄 Loading ${supplierRef.name}...`);
+        const supplier = await this.loadSingleSupplier(supplierRef.id);
+        if (supplier) {
+          suppliers.push(supplier);
+        } else {
+          console.warn(`⚠️ Could not load supplier ${supplierRef.name}`);
+        }
+      }
+
+      console.log(`✅ Loaded ${suppliers.length} suppliers successfully`);
+      return suppliers;
+    } catch (error) {
+      console.error('Error loading suppliers with new system:', error);
+      return [];
+    }
+  }
+
+  async saveSuppliersNew(suppliers: Supplier[]): Promise<void> {
+    console.log('💾 Saving suppliers with new architecture...');
+    try {
+      // 1. Salva ogni fornitore individualmente (con base64 completo)
+      for (const supplier of suppliers) {
+        console.log(`💾 Saving ${supplier.name}...`);
+        await this.saveSingleSupplier(supplier);
+      }
+
+      // 2. Aggiorna l'indice
+      const index: SupplierIndex = {
+        suppliers: suppliers.map(s => ({
+          id: s.id,
+          name: s.name,
+          lastModified: new Date().toISOString()
+        })),
+        lastUpdated: new Date().toISOString()
+      };
+
+      await this.saveSuppliersIndex(index);
+      console.log('✅ All suppliers and index saved successfully');
+    } catch (error) {
+      console.error('Error saving suppliers with new system:', error);
+      throw error;
+    }
+  }
+
+  // === FUNZIONI LEGACY (MANTENIAMO PER BACKWARD COMPATIBILITY) ===
 
   async loadSuppliers(): Promise<Supplier[]> {
     try {

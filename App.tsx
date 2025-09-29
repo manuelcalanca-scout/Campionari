@@ -108,6 +108,35 @@ const AppContent: React.FC = () => {
     }
   }, []);
 
+  const handleTestNewSystem = useCallback(async () => {
+    if (!googleAuth.isUserSignedIn()) {
+      alert('Devi essere autenticato per questa operazione.');
+      return;
+    }
+
+    try {
+      console.log('🧪 Testing new JSON architecture...');
+
+      // Salva con nuovo sistema
+      await googleDrive.saveSuppliersNew(suppliers);
+      alert('✅ Salvato con nuovo sistema JSON separati!\n\nOra proviamo a ricaricare...');
+
+      // Ricarica con nuovo sistema
+      const loadedSuppliers = await googleDrive.loadSuppliersNew();
+      console.log('🔄 Loaded with new system:', loadedSuppliers);
+
+      if (loadedSuppliers.length > 0) {
+        setSuppliers(loadedSuppliers);
+        alert(`✅ Nuovo sistema funziona!\n\nCaricati ${loadedSuppliers.length} fornitori`);
+      } else {
+        alert('⚠️ Nuovo sistema non ha restituito dati');
+      }
+    } catch (error) {
+      console.error('Error testing new system:', error);
+      alert('Errore durante il test. Controlla la console.');
+    }
+  }, [suppliers]);
+
   const handleResetAll = useCallback(async () => {
     const confirmed = confirm(
       '⚠️ ATTENZIONE: Questa operazione cancellerà:\n\n' +
@@ -339,6 +368,13 @@ const AppContent: React.FC = () => {
                 title="Rendi pubbliche tutte le immagini"
               >
                 🔓 Abilita Immagini
+              </button>
+              <button
+                onClick={handleTestNewSystem}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                title="Testa nuovo sistema JSON separati"
+              >
+                🧪 Test Nuovo Sistema
               </button>
               <button
                 onClick={handleResetAll}
