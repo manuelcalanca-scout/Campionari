@@ -30,29 +30,54 @@ export const useImageLoader = (image: ImageFile | null): ImageLoaderState => {
       return;
     }
 
-    // Se l'immagine ha già il dataUrl (formato legacy), usalo
+    // PRIORITÀ 1: Se ha dataUrl (base64), usalo sempre (modalità legacy/fallback)
     if (image.dataUrl) {
-      console.log('🖼️ Using existing dataUrl for:', image.name);
+      console.log('🖼️ Using base64 dataUrl for:', image.name);
       setState({ dataUrl: image.dataUrl, isLoading: false, error: null });
       return;
     }
 
-    // Se non ha driveFileId, non può essere caricata
-    if (!image.driveFileId) {
-      console.log('🖼️ No driveFileId for:', image.name);
-      setState({ dataUrl: null, isLoading: false, error: 'No image data available' });
+    // PRIORITÀ 2: Se ha solo driveFileId, prova a caricare (modalità ottimizzata)
+    if (image.driveFileId) {
+      console.log('🖼️ Attempting to load optimized version from Drive:', image.name);
+      setState(prev => ({ ...prev, isLoading: true, error: null }));
+
+      googleDrive.loadImageData(image)
+        .then(loadedImage => {
+          console.log('🖼️ Drive load result:', {
+            name: image.name,
+            success: !!loadedImage.dataUrl,
+            dataUrlLength: loadedImage.dataUrl?.length
+          });
+
+          if (loadedImage.dataUrl) {
+            setState({
+              dataUrl: loadedImage.dataUrl,
+              isLoading: false,
+              error: null
+            });
+          } else {
+            setState({
+              dataUrl: null,
+              isLoading: false,
+              error: 'Failed to load optimized image'
+            });
+          }
+        })
+        .catch(error => {
+          console.error('🖼️ Error loading optimized image:', image.name, error);
+          setState({
+            dataUrl: null,
+            isLoading: false,
+            error: 'Failed to load image from Drive'
+          });
+        });
       return;
     }
 
-    // Se ha driveFileId, usa URL diretto da Google Drive
-    console.log('🖼️ Using direct Drive URL:', image.name, 'ID:', image.driveFileId);
-    const directUrl = `https://drive.google.com/uc?id=${image.driveFileId}&export=download`;
-
-    setState({
-      dataUrl: directUrl,
-      isLoading: false,
-      error: null
-    });
+    // PRIORITÀ 3: Nessun dato disponibile
+    console.log('🖼️ No image data available for:', image.name);
+    setState({ dataUrl: null, isLoading: false, error: 'No image data available' });
   }, [image?.driveFileId, image?.dataUrl]);
 
   return state;

@@ -562,9 +562,9 @@ class GoogleDriveService {
       try {
         const driveFileId = await this.uploadImage(image, supplierId, type);
         console.log(`✓ Converted ${image.name} → Drive file ${driveFileId}`);
+        // MANTIENI base64 come fallback + aggiungi driveFileId per ottimizzazione
         return {
-          name: image.name,
-          type: image.type,
+          ...image, // Mantiene dataUrl originale
           driveFileId: driveFileId,
           isLoaded: false
         };
@@ -576,8 +576,7 @@ class GoogleDriveService {
           const driveFileId = await this.uploadImage(image, supplierId, type);
           console.log(`✓ Retry successful: ${image.name} → Drive file ${driveFileId}`);
           return {
-            name: image.name,
-            type: image.type,
+            ...image, // Mantiene dataUrl originale
             driveFileId: driveFileId,
             isLoaded: false
           };
@@ -633,15 +632,13 @@ class GoogleDriveService {
   }
 
   private stripImageDataUrl(image: ImageFile): ImageFile {
-    // Prima forza pulizia se esistono entrambi
-    const cleanedImage = this.forceCleanImageData(image);
-
-    if (cleanedImage.driveFileId) {
-      // Se ha driveFileId, rimuovi dataUrl per ridurre dimensioni
-      const { dataUrl, isLoaded, ...cleanImage } = cleanedImage;
-      return cleanImage;
+    // NUOVO APPROCCIO: Non rimuovere mai base64, usalo come fallback
+    if (image.driveFileId && image.dataUrl) {
+      // Ha entrambi - mantieni entrambi per robustezza
+      console.log(`Keeping both base64 and Drive ID for ${image.name}`);
+      return image;
     }
-    return cleanedImage;
+    return image;
   }
 
   private createMultipartBody(metadata: any, media: any, boundary: string): string {
