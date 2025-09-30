@@ -455,14 +455,22 @@ class GoogleDriveService {
         }
       }
 
-      // 2. Aggiorna sempre l'indice
+      // 2. Carica l'indice esistente per preservare lastModified
+      const existingIndex = await this.loadSuppliersIndex();
+      const existingMap = new Map(existingIndex.suppliers.map(s => [s.id, s.lastModified]));
+
+      // 3. Aggiorna l'indice (solo lastModified dei fornitori salvati)
+      const now = new Date().toISOString();
       const index: SupplierIndex = {
         suppliers: suppliers.map(s => ({
           id: s.id,
           name: s.name,
-          lastModified: new Date().toISOString()
+          // Aggiorna lastModified solo se questo fornitore è stato salvato
+          lastModified: (shouldSaveAll || dirtySupplierIds!.has(s.id))
+            ? now
+            : (existingMap.get(s.id) || now) // Mantieni il vecchio lastModified
         })),
-        lastUpdated: new Date().toISOString()
+        lastUpdated: now
       };
 
       await this.saveSuppliersIndex(index);
