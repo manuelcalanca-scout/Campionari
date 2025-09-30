@@ -1297,6 +1297,42 @@ class GoogleDriveService {
   // ==========================================
 
   /**
+   * Load all suppliers with GRANULAR architecture
+   */
+  async loadSuppliersGranular(): Promise<Supplier[]> {
+    try {
+      this.setAuthToken();
+
+      // Load index
+      const index = await this.loadSuppliersIndex();
+      console.log(`📚 Loading suppliers with GRANULAR architecture...`);
+      console.log(`📋 Index contains ${index.suppliers.length} suppliers`);
+
+      // Load each supplier completely (header + all items)
+      const suppliers: Supplier[] = [];
+
+      for (const supplierMeta of index.suppliers) {
+        console.log(`📄 Loading ${supplierMeta.name} (granular)...`);
+        const supplier = await this.loadSupplierComplete(supplierMeta.id);
+
+        if (supplier) {
+          suppliers.push(supplier);
+          console.log(`✓ Loaded ${supplier.name} (${supplier.items.length} items)`);
+        } else {
+          console.warn(`⚠️ Could not load supplier ${supplierMeta.name} (granular)`);
+        }
+      }
+
+      console.log(`✅ Loaded ${suppliers.length} suppliers successfully (GRANULAR)`);
+      return suppliers;
+
+    } catch (error) {
+      console.error('Error loading suppliers with granular architecture:', error);
+      return [];
+    }
+  }
+
+  /**
    * Migrate from monolithic to granular structure
    */
   async migrateToGranularStructure(): Promise<void> {

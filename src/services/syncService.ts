@@ -250,9 +250,15 @@ class SyncService {
     this.updateSyncStatus({ syncing: true });
 
     try {
-      const cloudSuppliers = await googleDrive.loadSuppliersNew();
+      // Use granular or legacy loading based on feature flag
+      const cloudSuppliers = this.useGranularStorage
+        ? await googleDrive.loadSuppliersGranular()
+        : await googleDrive.loadSuppliersNew();
+
+      console.log(`📥 Loaded from cloud using ${this.useGranularStorage ? 'GRANULAR' : 'LEGACY'} architecture`);
+
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(cloudSuppliers));
-      
+
       const now = new Date().toISOString();
       localStorage.setItem(LAST_SYNC_KEY, now);
       this.clearPendingChanges();
