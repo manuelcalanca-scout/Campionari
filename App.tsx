@@ -295,7 +295,8 @@ const AppContent: React.FC = () => {
         }
         return supplier;
       }),
-      supplierId
+      supplierId,
+      itemId
     );
   }, [updateSuppliers]);
 
@@ -326,7 +327,8 @@ const AppContent: React.FC = () => {
           ? { ...s, items: s.items.filter(item => item.id !== itemId) }
           : s
       ),
-      supplierId
+      supplierId,
+      itemId
     );
   }, [updateSuppliers]);
 
