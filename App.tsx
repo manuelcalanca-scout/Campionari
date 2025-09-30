@@ -156,7 +156,7 @@ const AppContent: React.FC = () => {
       },
       items: []
     };
-    updateSuppliers(prev => [...prev, newSupplier]);
+    updateSuppliers(prev => [...prev, newSupplier], newSupplier.id);
     setSelectedSupplierId(newSupplier.id);
   }, [updateSuppliers]);
   
@@ -216,7 +216,7 @@ const AppContent: React.FC = () => {
   
   const handleAddItemImages = useCallback(async (supplierId: string, itemId: string, newFiles: FileList | null) => {
     if (!newFiles || newFiles.length === 0) return;
-    
+
     try {
         const newImageFilesPromises = Array.from(newFiles).map(fileToImageFile);
         const newImageFiles = await Promise.all(newImageFilesPromises);
@@ -233,7 +233,8 @@ const AppContent: React.FC = () => {
                   ),
                 }
               : supplier
-          )
+          ),
+          supplierId
         );
     } catch (error) {
         console.error("Error processing item images:", error);
@@ -257,7 +258,8 @@ const AppContent: React.FC = () => {
           };
         }
         return supplier;
-      })
+      }),
+      supplierId
     );
   }, [updateSuppliers]);
 
@@ -276,7 +278,8 @@ const AppContent: React.FC = () => {
     updateSuppliers(prev =>
       prev.map(s =>
         s.id === supplierId ? { ...s, items: [...s.items, newItem] } : s
-      )
+      ),
+      supplierId
     );
   }, [updateSuppliers]);
 
@@ -286,7 +289,8 @@ const AppContent: React.FC = () => {
         s.id === supplierId
           ? { ...s, items: s.items.filter(item => item.id !== itemId) }
           : s
-      )
+      ),
+      supplierId
     );
   }, [updateSuppliers]);
 
