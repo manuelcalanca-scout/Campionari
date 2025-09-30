@@ -16,7 +16,7 @@ const SUPPLIERS_INDEX_FILE_NAME = 'suppliers-index.json'; // New architecture
 const SHARED_DRIVE_ID = import.meta.env.VITE_SHARED_DRIVE_ID;
 
 // Nuova architettura: JSON separati per ogni fornitore
-interface SupplierIndex {
+export interface SupplierIndex {
   suppliers: {
     id: string;
     name: string;
@@ -398,8 +398,15 @@ class GoogleDriveService {
 
   // === NUOVE FUNZIONI HIGH-LEVEL PER IL NUOVO SISTEMA ===
 
+  async loadSuppliersIndexOnly(): Promise<SupplierIndex> {
+    console.log('📚 Loading suppliers index only (lazy mode)...');
+    const index = await this.loadSuppliersIndex();
+    console.log(`📋 Index loaded: ${index.suppliers.length} suppliers (${JSON.stringify(index).length} bytes)`);
+    return index;
+  }
+
   async loadSuppliersNew(): Promise<Supplier[]> {
-    console.log('📚 Loading suppliers with new architecture...');
+    console.log('📚 Loading ALL suppliers (full load - use only for migration)...');
     try {
       // 1. Carica l'indice
       const index = await this.loadSuppliersIndex();
