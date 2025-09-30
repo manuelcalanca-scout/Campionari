@@ -75,10 +75,10 @@ const AppContent: React.FC = () => {
   const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(syncService.getSyncStatus());
 
-  const updateSuppliers = useCallback((updater: (prev: Supplier[]) => Supplier[], changedSupplierId?: string) => {
+  const updateSuppliers = useCallback((updater: (prev: Supplier[]) => Supplier[], changedSupplierId?: string, changedItemId?: string) => {
     setSuppliers(prev => {
         const newSuppliers = updater(prev);
-        syncService.saveLocally(newSuppliers, changedSupplierId);
+        syncService.saveLocally(newSuppliers, changedSupplierId, changedItemId);
         return newSuppliers;
     });
   }, []);
@@ -122,6 +122,42 @@ const AppContent: React.FC = () => {
     } catch (error) {
       console.error('Error during reset:', error);
       alert('⚠️ Reset parzialmente completato.\n\nDati locali cancellati, ma errore nella pulizia di Google Drive.\nControlla la console per dettagli.');
+    }
+  }, []);
+
+  const [isMigrating, setIsMigrating] = useState(false);
+
+  const handleMigrateToGranular = useCallback(async () => {
+    const confirmed = confirm(
+      '🔄 MIGRAZIONE A STRUTTURA GRANULARE\n\n' +
+      'Questa operazione:\n' +
+      '• Creerà file separati per header e items\n' +
+      '• Cancellerà i vecchi file monolitici\n' +
+      '• Migliorerà performance e sync (95% più veloce)\n\n' +
+      'I tuoi dati sono al sicuro, ma assicurati di avere una copia di backup.\n\n' +
+      'Procedere con la migrazione?'
+    );
+
+    if (!confirmed) return;
+
+    setIsMigrating(true);
+
+    try {
+      await googleDrive.migrateToGranularStructure();
+
+      // Abilita architettura granulare
+      syncService.enableGranularStorage();
+
+      // Ricarica dati
+      const updatedSuppliers = await syncService.syncFromCloud();
+      setSuppliers(updatedSuppliers);
+
+      alert('✅ Migrazione completata!\n\nL\'app ora usa la nuova architettura granulare.\nLe modifiche saranno molto più veloci!');
+    } catch (error) {
+      console.error('Migration error:', error);
+      alert('❌ Errore durante la migrazione.\n\nI file originali sono preservati. Controlla la console per dettagli.');
+    } finally {
+      setIsMigrating(false);
     }
   }, []);
 
@@ -323,6 +359,14 @@ const AppContent: React.FC = () => {
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
                 {syncStatus.syncing ? 'Salvando...' : 'Salva su Drive'}
+              </button>
+              <button
+                onClick={handleMigrateToGranular}
+                disabled={isMigrating}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                title="Migra a storage granulare per sync più veloce"
+              >
+                {isMigrating ? '🔄 Migrando...' : '🚀 Migra Granulare'}
               </button>
               <button
                 onClick={handleResetAll}

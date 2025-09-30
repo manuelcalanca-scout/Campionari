@@ -957,6 +957,403 @@ class GoogleDriveService {
     body += close_delim;
     return body;
   }
+
+  // ==========================================
+  // GRANULAR STORAGE: Header + Item Files
+  // ==========================================
+
+  /**
+   * Find files by name prefix
+   */
+  private async findFilesByPrefix(prefix: string): Promise<Array<{ id: string; name: string }>> {
+    const appFolderId = await this.ensureAppFolder();
+
+    const queryParams: any = {
+      q: `name contains '${prefix}' and '${appFolderId}' in parents and trashed=false`,
+      fields: 'files(id, name)',
+    };
+
+    if (SHARED_DRIVE_ID) {
+      queryParams.supportsAllDrives = true;
+      queryParams.includeItemsFromAllDrives = true;
+    }
+
+    const response = await gapi.client.drive.files.list(queryParams);
+    return response.result.files || [];
+  }
+
+  /**
+   * Find single file by exact name
+   */
+  private async findFileByName(fileName: string): Promise<{ id: string; name: string } | null> {
+    const appFolderId = await this.ensureAppFolder();
+
+    const queryParams: any = {
+      q: `name='${fileName}' and '${appFolderId}' in parents and trashed=false`,
+      fields: 'files(id, name)',
+    };
+
+    if (SHARED_DRIVE_ID) {
+      queryParams.supportsAllDrives = true;
+      queryParams.includeItemsFromAllDrives = true;
+    }
+
+    const response = await gapi.client.drive.files.list(queryParams);
+    const files = response.result.files;
+
+    return files && files.length > 0 ? files[0] : null;
+  }
+
+  /**
+   * Create or update file with content
+   */
+  private async createOrUpdateFile(fileName: string, content: string): Promise<void> {
+    const appFolderId = await this.ensureAppFolder();
+    const existingFile = await this.findFileByName(fileName);
+
+    const metadata = {
+      name: fileName,
+      parents: [appFolderId]
+    };
+
+    if (existingFile) {
+      // Update existing file
+      const updateParams: any = {
+        path: `https://www.googleapis.com/upload/drive/v3/files/${existingFile.id}`,
+        method: 'PATCH',
+        params: { uploadType: 'media' },
+        headers: { 'Content-Type': 'application/json' },
+        body: content
+      };
+
+      if (SHARED_DRIVE_ID) {
+        updateParams.params.supportsAllDrives = true;
+      }
+
+      await gapi.client.request(updateParams);
+    } else {
+      // Create new file
+      const createParams: any = {
+        path: 'https://www.googleapis.com/upload/drive/v3/files',
+        method: 'POST',
+        params: { uploadType: 'multipart' },
+        headers: { 'Content-Type': 'multipart/related; boundary="foo_bar_baz"' },
+        body: this.createMultipartBody(metadata, { mimeType: 'application/json', body: content }, 'foo_bar_baz')
+      };
+
+      if (SHARED_DRIVE_ID) {
+        createParams.params.supportsAllDrives = true;
+      }
+
+      await gapi.client.request(createParams);
+    }
+  }
+
+  /**
+   * Download file content by file ID
+   */
+  private async downloadFileContent(fileId: string): Promise<string> {
+    const getParams: any = {
+      fileId,
+      alt: 'media'
+    };
+
+    if (SHARED_DRIVE_ID) {
+      getParams.supportsAllDrives = true;
+    }
+
+    const response = await gapi.client.drive.files.get(getParams);
+    return response.body;
+  }
+
+  /**
+   * Delete file by file ID
+   */
+  private async deleteFileById(fileId: string): Promise<void> {
+    const deleteParams: any = {
+      path: `https://www.googleapis.com/drive/v3/files/${fileId}`,
+      method: 'DELETE'
+    };
+
+    if (SHARED_DRIVE_ID) {
+      deleteParams.params = { supportsAllDrives: true };
+    }
+
+    await gapi.client.request(deleteParams);
+  }
+
+  // ==========================================
+  // HEADER OPERATIONS
+  // ==========================================
+
+  async saveSupplierHeader(supplierId: string, name: string, headerData: any): Promise<void> {
+    this.setAuthToken();
+    const fileName = `supplier-${supplierId}-header.json`;
+    const content = JSON.stringify({ id: supplierId, name, headerData }, null, 2);
+
+    console.log(`💾 Saving header for ${name} (${Math.round(content.length / 1024)}KB)...`);
+    await this.createOrUpdateFile(fileName, content);
+  }
+
+  async loadSupplierHeader(supplierId: string): Promise<{ name: string; headerData: any } | null> {
+    try {
+      this.setAuthToken();
+      const fileName = `supplier-${supplierId}-header.json`;
+      const file = await this.findFileByName(fileName);
+
+      if (!file) {
+        console.log(`Header file ${fileName} not found`);
+        return null;
+      }
+
+      const content = await this.downloadFileContent(file.id);
+      const parsed = JSON.parse(content);
+      return { name: parsed.name, headerData: parsed.headerData };
+    } catch (error) {
+      console.error(`Error loading header for ${supplierId}:`, error);
+      return null;
+    }
+  }
+
+  async deleteSupplierHeader(supplierId: string): Promise<void> {
+    this.setAuthToken();
+    const fileName = `supplier-${supplierId}-header.json`;
+    const file = await this.findFileByName(fileName);
+
+    if (file) {
+      await this.deleteFileById(file.id);
+      console.log(`🗑️ Deleted header: ${fileName}`);
+    }
+  }
+
+  // ==========================================
+  // ITEM OPERATIONS
+  // ==========================================
+
+  async saveSupplierItem(supplierId: string, item: any): Promise<void> {
+    this.setAuthToken();
+    const fileName = `supplier-${supplierId}-item-${item.id}.json`;
+    const content = JSON.stringify({ ...item, supplierId }, null, 2);
+
+    console.log(`💾 Saving item ${item.itemCode || 'untitled'} (${Math.round(content.length / 1024)}KB)...`);
+    await this.createOrUpdateFile(fileName, content);
+  }
+
+  async loadSupplierItem(supplierId: string, itemId: string): Promise<any | null> {
+    try {
+      this.setAuthToken();
+      const fileName = `supplier-${supplierId}-item-${itemId}.json`;
+      const file = await this.findFileByName(fileName);
+
+      if (!file) {
+        console.log(`Item file ${fileName} not found`);
+        return null;
+      }
+
+      const content = await this.downloadFileContent(file.id);
+      const parsed = JSON.parse(content);
+
+      // Remove supplierId from item (denormalize)
+      const { supplierId: _, ...item } = parsed;
+      return item;
+    } catch (error) {
+      console.error(`Error loading item ${itemId}:`, error);
+      return null;
+    }
+  }
+
+  async loadAllSupplierItems(supplierId: string): Promise<any[]> {
+    try {
+      this.setAuthToken();
+      const prefix = `supplier-${supplierId}-item-`;
+      const files = await this.findFilesByPrefix(prefix);
+
+      console.log(`📄 Loading ${files.length} items for supplier ${supplierId}...`);
+
+      const items = await Promise.all(
+        files.map(async (file) => {
+          const content = await this.downloadFileContent(file.id);
+          const parsed = JSON.parse(content);
+          const { supplierId: _, ...item } = parsed;
+          return item;
+        })
+      );
+
+      return items;
+    } catch (error) {
+      console.error(`Error loading items for ${supplierId}:`, error);
+      return [];
+    }
+  }
+
+  async deleteSupplierItem(supplierId: string, itemId: string): Promise<void> {
+    this.setAuthToken();
+    const fileName = `supplier-${supplierId}-item-${itemId}.json`;
+    const file = await this.findFileByName(fileName);
+
+    if (file) {
+      await this.deleteFileById(file.id);
+      console.log(`🗑️ Deleted item: ${fileName}`);
+    }
+  }
+
+  async deleteAllSupplierItems(supplierId: string): Promise<void> {
+    this.setAuthToken();
+    const prefix = `supplier-${supplierId}-item-`;
+    const files = await this.findFilesByPrefix(prefix);
+
+    console.log(`🗑️ Deleting ${files.length} items for supplier ${supplierId}...`);
+
+    await Promise.all(files.map(file => this.deleteFileById(file.id)));
+  }
+
+  // ==========================================
+  // FULL SUPPLIER OPERATIONS
+  // ==========================================
+
+  async loadSupplierComplete(supplierId: string): Promise<Supplier | null> {
+    try {
+      this.setAuthToken();
+
+      const header = await this.loadSupplierHeader(supplierId);
+      if (!header) return null;
+
+      const items = await this.loadAllSupplierItems(supplierId);
+
+      return {
+        id: supplierId,
+        name: header.name,
+        headerData: header.headerData,
+        items
+      };
+    } catch (error) {
+      console.error(`Error loading complete supplier ${supplierId}:`, error);
+      return null;
+    }
+  }
+
+  async deleteSupplierComplete(supplierId: string): Promise<void> {
+    this.setAuthToken();
+
+    console.log(`🗑️ Deleting complete supplier ${supplierId}...`);
+
+    // Delete header
+    await this.deleteSupplierHeader(supplierId);
+
+    // Delete all items
+    await this.deleteAllSupplierItems(supplierId);
+
+    console.log(`✅ Supplier ${supplierId} deleted completely`);
+  }
+
+  // ==========================================
+  // GRANULAR INDEX MANAGEMENT
+  // ==========================================
+
+  async saveGranularIndexSelective(
+    suppliers: Supplier[],
+    dirtyHeaders: Set<string>,
+    dirtyItems: Map<string, Set<string>>
+  ): Promise<void> {
+    this.setAuthToken();
+
+    // Load existing index to preserve timestamps
+    const existingIndex = await this.loadSuppliersIndex();
+    const existingMap = new Map(existingIndex.suppliers.map((s: any) => [s.id, s]));
+
+    const now = new Date().toISOString();
+
+    const index = {
+      suppliers: suppliers.map(s => {
+        const existing = existingMap.get(s.id);
+        const headerModified = dirtyHeaders.has(s.id);
+        const itemsDirty = dirtyItems.get(s.id) || new Set();
+
+        return {
+          id: s.id,
+          name: s.name,
+          headerLastModified: headerModified ? now : (existing?.headerLastModified || now),
+          items: s.items.map((item: any) => {
+            const itemModified = itemsDirty.has(item.id);
+            const existingItem = existing?.items?.find((i: any) => i.id === item.id);
+
+            return {
+              id: item.id,
+              itemCode: item.itemCode,
+              lastModified: itemModified ? now : (existingItem?.lastModified || now)
+            };
+          })
+        };
+      }),
+      lastUpdated: now
+    };
+
+    await this.createOrUpdateFile('suppliers-index.json', JSON.stringify(index, null, 2));
+    console.log('📋 Granular index updated');
+  }
+
+  // ==========================================
+  // MIGRATION FUNCTION
+  // ==========================================
+
+  /**
+   * Migrate from monolithic to granular structure
+   */
+  async migrateToGranularStructure(): Promise<void> {
+    console.log('🔄 Starting migration to granular structure...');
+
+    try {
+      this.setAuthToken();
+
+      // 1. Load all suppliers with old architecture
+      const suppliers = await this.loadSuppliersNew();
+
+      if (suppliers.length === 0) {
+        console.log('ℹ️ No suppliers to migrate');
+        return;
+      }
+
+      console.log(`📦 Found ${suppliers.length} suppliers to migrate`);
+
+      // 2. For each supplier, create header + items
+      for (const supplier of suppliers) {
+        console.log(`🔄 Migrating ${supplier.name}...`);
+
+        // Save header
+        await this.saveSupplierHeader(supplier.id, supplier.name, supplier.headerData);
+        console.log(`  ✓ Header saved`);
+
+        // Save each item
+        for (const item of supplier.items) {
+          await this.saveSupplierItem(supplier.id, item);
+          console.log(`  ✓ Item ${item.itemCode || 'untitled'} saved`);
+        }
+
+        // Delete old monolithic file
+        const oldFileName = `supplier-${supplier.id}.json`;
+        const oldFile = await this.findFileByName(oldFileName);
+        if (oldFile) {
+          await this.deleteFileById(oldFile.id);
+          console.log(`  🗑️ Old monolithic file deleted`);
+        }
+      }
+
+      // 3. Update index with granular structure
+      const dirtyHeaders = new Set(suppliers.map(s => s.id));
+      const dirtyItems = new Map(
+        suppliers.map(s => [s.id, new Set(s.items.map((i: any) => i.id))])
+      );
+
+      await this.saveGranularIndexSelective(suppliers, dirtyHeaders, dirtyItems);
+      console.log('📋 Index updated');
+
+      console.log('✅ Migration completed successfully!');
+
+    } catch (error) {
+      console.error('❌ Migration failed:', error);
+      throw new Error('Migration failed. Old files preserved for safety.');
+    }
+  }
 }
 
 export const googleDrive = new GoogleDriveService();
