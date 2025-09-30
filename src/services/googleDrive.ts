@@ -329,21 +329,10 @@ class GoogleDriveService {
     this.setAuthToken();
     const appFolderId = await this.ensureAppFolder();
 
-    // Analizza le dimensioni prima dell'ottimizzazione
-    const beforeAnalysis = this.analyzeSuppliersSize(suppliers);
-    console.log(`Before optimization: ${Math.round(beforeAnalysis.totalSize / 1024)}KB, ${beforeAnalysis.details}`);
-
-    // Prima ottimizza convertendo immagini base64 in file separati su Drive
-    console.log('Converting suppliers to optimized format...');
-    const optimizedSuppliers = await this.convertSuppliersToOptimized(suppliers);
-
-    // Poi prepara per il salvataggio rimuovendo dataUrl dai file già su Drive
-    const cleanSuppliers = this.prepareSuppliersForSaving(optimizedSuppliers);
-
-    const content = JSON.stringify(cleanSuppliers, null, 2);
-    const afterAnalysis = this.analyzeSuppliersSize(cleanSuppliers);
-    console.log(`After optimization: ${Math.round(afterAnalysis.totalSize / 1024)}KB, ${afterAnalysis.details}`);
-    console.log(`Saving suppliers.json (${Math.round(content.length / 1024)}KB) to Drive...`);
+    // Salva tutto con base64 embedded (sistema stabile)
+    const content = JSON.stringify(suppliers, null, 2);
+    const analysis = this.analyzeSuppliersSize(suppliers);
+    console.log(`💾 Saving suppliers.json: ${Math.round(content.length / 1024)}KB with ${analysis.imageCount} images (base64 embedded)`);
 
     const queryParams: any = {
       q: `name='${SUPPLIERS_FILE_NAME}' and '${appFolderId}' in parents and trashed=false`,
