@@ -5,6 +5,7 @@ import { googleAuth } from './googleAuth';
 const LOCAL_STORAGE_KEY = 'product-spec-sheet-creator-suppliers';
 const LAST_SYNC_KEY = 'product-spec-sheet-creator-last-sync';
 const PENDING_CHANGES_KEY = 'product-spec-sheet-creator-pending-changes';
+const DIRTY_SUPPLIERS_KEY = 'product-spec-sheet-creator-dirty-suppliers'; // IDs dei fornitori modificati
 
 export interface SyncStatus {
   isOnline: boolean;
@@ -21,6 +22,7 @@ class SyncService {
     hasPendingChanges: this.hasPendingChanges(),
     syncing: false
   };
+  private dirtySupplierIds: Set<string> = this.loadDirtySupplierIds();
 
   constructor() {
     window.addEventListener('online', this.handleOnline.bind(this));
@@ -55,20 +57,40 @@ class SyncService {
     };
   }
 
-  saveLocally(suppliers: Supplier[]): void {
+  saveLocally(suppliers: Supplier[], changedSupplierId?: string): void {
     try {
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(suppliers));
-      this.markPendingChanges();
+
+      // Se specificato, marca solo quel fornitore come dirty
+      // Altrimenti marca tutti (caso sicuro ma meno efficiente)
+      if (changedSupplierId) {
+        this.markSupplierDirty(changedSupplierId);
+      } else {
+        // Marca tutti i fornitori come dirty
+        suppliers.forEach(s => this.dirtySupplierIds.add(s.id));
+        this.saveDirtySupplierIds();
+        this.markPendingChanges();
+      }
+
       this.updateSyncStatus({ hasPendingChanges: true });
     } catch (error) {
       console.error('Error saving suppliers locally:', error);
     }
   }
 
-  saveLocallyAndSync(suppliers: Supplier[]): void {
+  saveLocallyAndSync(suppliers: Supplier[], changedSupplierId?: string): void {
     try {
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(suppliers));
-      this.markPendingChanges();
+
+      // Marca fornitori dirty
+      if (changedSupplierId) {
+        this.markSupplierDirty(changedSupplierId);
+      } else {
+        suppliers.forEach(s => this.dirtySupplierIds.add(s.id));
+        this.saveDirtySupplierIds();
+        this.markPendingChanges();
+      }
+
       this.updateSyncStatus({ hasPendingChanges: true });
 
       if (this.currentSyncStatus.isOnline && googleAuth.isUserSignedIn()) {
@@ -103,12 +125,12 @@ class SyncService {
     try {
       const localSuppliers = this.loadLocally();
 
-      // Sistema JSON-per-supplier: salva sempre locale → cloud quando ci sono pending changes
-      // Non facciamo merge automatico per evitare conflitti
+      // Sistema JSON-per-supplier: salva solo fornitori modificati
       if (this.hasPendingChanges()) {
         console.log('💾 Saving to cloud with JSON-per-supplier architecture...');
-        await googleDrive.saveSuppliersNew(localSuppliers);
+        await googleDrive.saveSuppliersNew(localSuppliers, this.dirtySupplierIds);
         this.clearPendingChanges();
+        this.clearDirtySupplierIds(); // Pulisci dopo il salvataggio riuscito
         console.log('✅ Synced from local to cloud (JSON-per-supplier)');
       }
 
@@ -167,6 +189,30 @@ class SyncService {
 
   private clearPendingChanges(): void {
     localStorage.removeItem(PENDING_CHANGES_KEY);
+  }
+
+  private loadDirtySupplierIds(): Set<string> {
+    try {
+      const saved = localStorage.getItem(DIRTY_SUPPLIERS_KEY);
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch (error) {
+      return new Set();
+    }
+  }
+
+  private saveDirtySupplierIds(): void {
+    localStorage.setItem(DIRTY_SUPPLIERS_KEY, JSON.stringify(Array.from(this.dirtySupplierIds)));
+  }
+
+  private clearDirtySupplierIds(): void {
+    this.dirtySupplierIds.clear();
+    localStorage.removeItem(DIRTY_SUPPLIERS_KEY);
+  }
+
+  markSupplierDirty(supplierId: string): void {
+    this.dirtySupplierIds.add(supplierId);
+    this.saveDirtySupplierIds();
+    this.markPendingChanges();
   }
 
   getSyncStatus(): SyncStatus {

@@ -432,16 +432,30 @@ class GoogleDriveService {
     }
   }
 
-  async saveSuppliersNew(suppliers: Supplier[]): Promise<void> {
+  async saveSuppliersNew(suppliers: Supplier[], dirtySupplierIds?: Set<string>): Promise<void> {
     console.log('💾 Saving suppliers with new architecture...');
+
+    // Se non sono specificati ID "sporchi", salva tutti
+    const shouldSaveAll = !dirtySupplierIds || dirtySupplierIds.size === 0;
+
+    if (shouldSaveAll) {
+      console.log('⚠️ Saving ALL suppliers (no dirty tracking)');
+    } else {
+      console.log(`✅ Saving only ${dirtySupplierIds.size} modified supplier(s)`);
+    }
+
     try {
-      // 1. Salva ogni fornitore individualmente (con base64 completo)
+      // 1. Salva solo i fornitori modificati (o tutti se non specificato)
       for (const supplier of suppliers) {
-        console.log(`💾 Saving ${supplier.name}...`);
-        await this.saveSingleSupplier(supplier);
+        if (shouldSaveAll || dirtySupplierIds!.has(supplier.id)) {
+          console.log(`💾 Saving ${supplier.name}...`);
+          await this.saveSingleSupplier(supplier);
+        } else {
+          console.log(`⏭️ Skipping ${supplier.name} (not modified)`);
+        }
       }
 
-      // 2. Aggiorna l'indice
+      // 2. Aggiorna sempre l'indice
       const index: SupplierIndex = {
         suppliers: suppliers.map(s => ({
           id: s.id,
@@ -452,7 +466,7 @@ class GoogleDriveService {
       };
 
       await this.saveSuppliersIndex(index);
-      console.log('✅ All suppliers and index saved successfully');
+      console.log('✅ Suppliers and index saved successfully');
     } catch (error) {
       console.error('Error saving suppliers with new system:', error);
       throw error;

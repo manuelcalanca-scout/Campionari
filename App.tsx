@@ -75,10 +75,10 @@ const AppContent: React.FC = () => {
   const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(syncService.getSyncStatus());
 
-  const updateSuppliers = useCallback((updater: (prev: Supplier[]) => Supplier[]) => {
+  const updateSuppliers = useCallback((updater: (prev: Supplier[]) => Supplier[], changedSupplierId?: string) => {
     setSuppliers(prev => {
         const newSuppliers = updater(prev);
-        syncService.saveLocally(newSuppliers);
+        syncService.saveLocally(newSuppliers, changedSupplierId);
         return newSuppliers;
     });
   }, []);
@@ -166,7 +166,7 @@ const AppContent: React.FC = () => {
 
   const handleSupplierNameChange = useCallback((supplierId: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    updateSuppliers(prev => prev.map(s => s.id === supplierId ? { ...s, name: value } : s));
+    updateSuppliers(prev => prev.map(s => s.id === supplierId ? { ...s, name: value } : s), supplierId);
   }, [updateSuppliers]);
 
   const handleHeaderChange = useCallback((supplierId: string, e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -176,7 +176,8 @@ const AppContent: React.FC = () => {
         s.id === supplierId
           ? { ...s, headerData: { ...s.headerData, [name]: value } }
           : s
-      )
+      ),
+      supplierId
     );
   }, [updateSuppliers]);
 
@@ -187,7 +188,8 @@ const AppContent: React.FC = () => {
           prev.map(s => {
             if (s.id !== supplierId) return s;
             return { ...s, headerData: { ...s.headerData, businessCard: newImage }};
-          })
+          }),
+          supplierId
         );
     } catch (error) {
         console.error("Error processing business card image:", error);
@@ -207,7 +209,8 @@ const AppContent: React.FC = () => {
               ),
             }
           : supplier
-      )
+      ),
+      supplierId
     );
   }, [updateSuppliers]);
   
