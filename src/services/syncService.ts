@@ -136,9 +136,16 @@ class SyncService {
       if (this.hasPendingChanges()) {
         console.log('💾 Saving to cloud with JSON-per-supplier architecture...');
         console.log('🔍 Dirty suppliers:', Array.from(this.dirtySupplierIds));
-        await googleDrive.saveSuppliersNew(localSuppliers, this.dirtySupplierIds);
+
+        // Crea una copia dei dirty IDs da salvare
+        const idsToSave = new Set(this.dirtySupplierIds);
+
+        // Pulisci IMMEDIATAMENTE i dirty IDs per evitare accumulo
+        this.clearDirtySupplierIds();
+
+        // Salva usando la copia
+        await googleDrive.saveSuppliersNew(localSuppliers, idsToSave);
         this.clearPendingChanges();
-        this.clearDirtySupplierIds(); // Pulisci dopo il salvataggio riuscito
         console.log('✅ Synced from local to cloud (JSON-per-supplier)');
       }
 
