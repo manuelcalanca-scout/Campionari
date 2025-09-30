@@ -59,6 +59,11 @@ class SyncService {
 
   saveLocally(suppliers: Supplier[], changedSupplierId?: string): void {
     try {
+      console.log('💾 saveLocally called with:', {
+        changedSupplierId,
+        currentDirtyIds: Array.from(this.dirtySupplierIds)
+      });
+
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(suppliers));
 
       // Se specificato, marca solo quel fornitore come dirty
@@ -66,12 +71,14 @@ class SyncService {
       if (changedSupplierId) {
         this.markSupplierDirty(changedSupplierId);
       } else {
+        console.log('⚠️ No changedSupplierId provided - marking ALL suppliers as dirty');
         // Marca tutti i fornitori come dirty
         suppliers.forEach(s => this.dirtySupplierIds.add(s.id));
         this.saveDirtySupplierIds();
         this.markPendingChanges();
       }
 
+      console.log('💾 After saveLocally, dirty IDs:', Array.from(this.dirtySupplierIds));
       this.updateSyncStatus({ hasPendingChanges: true });
     } catch (error) {
       console.error('Error saving suppliers locally:', error);
@@ -206,15 +213,18 @@ class SyncService {
   }
 
   private clearDirtySupplierIds(): void {
+    console.log('🧹 Clearing dirty suppliers. Before:', Array.from(this.dirtySupplierIds));
     this.dirtySupplierIds.clear();
     localStorage.removeItem(DIRTY_SUPPLIERS_KEY);
+    console.log('🧹 After clear:', Array.from(this.dirtySupplierIds));
   }
 
   markSupplierDirty(supplierId: string): void {
-    console.log('🏷️ Marking supplier as dirty:', supplierId);
+    console.log('🏷️ Marking supplier as dirty:', supplierId, '| Current dirty:', Array.from(this.dirtySupplierIds));
     this.dirtySupplierIds.add(supplierId);
     this.saveDirtySupplierIds();
     this.markPendingChanges();
+    console.log('🏷️ After marking, dirty IDs:', Array.from(this.dirtySupplierIds));
   }
 
   getSyncStatus(): SyncStatus {
