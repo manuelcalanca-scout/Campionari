@@ -106,13 +106,13 @@ class SyncService {
       const localLastSync = this.currentSyncStatus.lastSync;
 
       if (cloudLastModified && localLastSync && new Date(cloudLastModified) > new Date(localLastSync)) {
-        const cloudSuppliers = await googleDrive.loadSuppliers();
+        const cloudSuppliers = await googleDrive.loadSuppliersNew();
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(cloudSuppliers));
-        console.log('Synced from cloud to local');
+        console.log('✅ Synced from cloud to local (JSON-per-supplier)');
       } else if (this.hasPendingChanges()) {
-        await googleDrive.saveSuppliers(localSuppliers);
+        await googleDrive.saveSuppliersNew(localSuppliers);
         this.clearPendingChanges();
-        console.log('Synced from local to cloud');
+        console.log('✅ Synced from local to cloud (JSON-per-supplier)');
       }
 
       const now = new Date().toISOString();
@@ -139,7 +139,7 @@ class SyncService {
     this.updateSyncStatus({ syncing: true });
 
     try {
-      const cloudSuppliers = await googleDrive.loadSuppliers();
+      const cloudSuppliers = await googleDrive.loadSuppliersNew();
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(cloudSuppliers));
       
       const now = new Date().toISOString();
