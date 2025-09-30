@@ -128,6 +128,7 @@ class SyncService {
       // Sistema JSON-per-supplier: salva solo fornitori modificati
       if (this.hasPendingChanges()) {
         console.log('💾 Saving to cloud with JSON-per-supplier architecture...');
+        console.log('🔍 Dirty suppliers:', Array.from(this.dirtySupplierIds));
         await googleDrive.saveSuppliersNew(localSuppliers, this.dirtySupplierIds);
         this.clearPendingChanges();
         this.clearDirtySupplierIds(); // Pulisci dopo il salvataggio riuscito
@@ -210,6 +211,7 @@ class SyncService {
   }
 
   markSupplierDirty(supplierId: string): void {
+    console.log('🏷️ Marking supplier as dirty:', supplierId);
     this.dirtySupplierIds.add(supplierId);
     this.saveDirtySupplierIds();
     this.markPendingChanges();
