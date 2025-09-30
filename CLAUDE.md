@@ -145,74 +145,54 @@ Item {
 - **Team Drive Fix**: Uso diretto root drive invece sottocartelle
 - **Build Compatibility**: Fix crypto.randomUUID() per production builds
 
-## 🚨 PROBLEMA CRITICO IN CORSO - Visualizzazione Immagini
+## ✅ SISTEMA FUNZIONANTE - Base64 in suppliers.json
 
-### 🔍 **Diagnosi Attuale (Sessione 23/09/2025)**
-**PROBLEMA**: Le immagini ottimizzate (separate da suppliers.json) non si visualizzano nell'app.
+### 🎯 **Soluzione Implementata (30/09/2025)**
+**APPROCCIO**: Mantenere immagini base64 embedded direttamente nel file `suppliers.json`
 
-**STATUS**:
-- ✅ Download da Google Drive funziona (54527 bytes, status 200)
-- ✅ Sistema lazy loading `useImageLoader` funziona
-- ✅ Componenti BusinessCardImage/ItemImage implementati correttamente
-- ❌ **ISSUE CRITICO**: Corruzione dati binari in tutti i metodi testati
+**DECISIONE ARCHITETTURALE**:
+- ❌ Sistema immagini separate su Drive non affidabile (corruzione dati binari)
+- ❌ URL diretti richiedono permessi pubblici complessi
+- ✅ **Base64 embedded funziona sempre** - semplice, robusto, offline-first
 
-### 🔬 **Analisi Tecnica del Problema**
-**Causa Identificata**: Google Drive API restituisce dati binari corrotti indipendentemente dal metodo:
+### 📊 **Stato Finale Sistema**
+- ✅ Immagini base64 salvate in `suppliers.json`
+- ✅ `useImageLoader` prioritizza base64 (sempre disponibile)
+- ✅ Componenti BusinessCardImage/ItemImage funzionanti
+- ✅ Caricamento fornitori corretto
+- ✅ Export Excel con immagini funzionante
+- ✅ App completamente operativa
 
-1. **Bytes Ricevuti**: `[195, 191, 195, 152, 195, 191, 195, 160, 0, 16]`
-2. **Bytes JPEG Corretti**: Dovrebbero essere `[255, 216, 255, 224, ...]`
-3. **Corruzione**: I valori 195,191,195,152 indicano encoding UTF-8 di bytes binari
-4. **Base64 Risultante**: `w7/DmMO/w6AAEEpGSUYAAQEBAEg` (corrotto)
-
-### ❌ **Metodi Testati e Falliti**
-1. `gapi.client.drive.files.get()` con `alt: 'media'` - Dati UTF-8 corrotti
-2. `fetch()` con `response.blob()` - Stessi dati corrotti
-3. `XMLHttpRequest` con `responseType: 'arraybuffer'` - Ancora corrotti
-4. Conversioni manuali byte-by-byte con `& 0xff` - Non risolve il problema a monte
-
-### 🎯 **PROSSIMA SOLUZIONE DA IMPLEMENTARE**
-**Approccio URL Diretto** (evitare download binary):
-```typescript
-// Invece di scaricare e convertire
-const dataUrl = await downloadImage(fileId);
-
-// USARE URL PUBBLICO DIRETTO
-const publicUrl = `https://drive.google.com/uc?id=${fileId}&export=download`;
-// Impostare come src diretto dell'img tag
+### 🏗️ **Architettura Attuale**
+```
+Google Drive /Campionari/
+└── 📄 suppliers.json  (completo con base64 embedded)
 ```
 
-### 📋 **Todo Immediato - Prossima Sessione**
-1. **PRIORITÀ 1**: Implementare sistema URL diretto per immagini
-2. **PRIORITÀ 2**: Verificare permessi Google Drive per accesso pubblico
-3. **PRIORITÀ 3**: Se fallisce, considerare rollback completo al sistema base64
-4. **PRIORITÀ 4**: Se necessario, valutare servizio esterno per hosting immagini
+**Vantaggi Sistema Corrente**:
+1. **Affidabilità**: Base64 sempre disponibile, no dipendenze esterne
+2. **Semplicità**: Un solo file da sincronizzare
+3. **Offline-First**: Funziona senza connessione dopo primo caricamento
+4. **Compatibilità**: Nessun problema di CORS/permessi/encoding
+5. **Manutenibilità**: Meno punti di fallimento
 
-### 🔧 **Stato Codebase**
-- ✅ Tutti i componenti usano correttamente `useImageLoader`
-- ✅ Sistema di lazy loading implementato e funzionante
-- ✅ Errore `supplierWithImages` corretto in SupplierDetailView
-- ✅ Debug logging completo per troubleshooting
-- ✅ Gestione errori onError/onLoad su img tags
-- ❌ **BLOCCANTE**: Download binary da Google Drive non funziona
+### 🔧 **Fix Applicati (Sessione 30/09/2025)**
+1. ✅ Errore `SUPPLIERS_FILE_NAME` undefined risolto
+2. ✅ Errore `supplierWithImages` scope risolto
+3. ✅ Ripristinato sistema base64 funzionante
+4. ✅ Rimossi pulsanti test sperimentali
+5. ✅ Pulizia codice non utilizzato
 
-### 🔄 **Opzione Rollback Pronta**
-Se il problema persiste, rollback al sistema originale:
-- Immagini base64 salvate direttamente in suppliers.json
-- File grande ma funzionante (4.7MB vs 50KB attuale)
-- Sistema provato e stabile
+### 🧪 **Esperimenti Tentati (Non Implementati)**
+- Sistema JSON per fornitore separato
+- Download immagini da Drive con conversione binary
+- URL diretti Google Drive con permessi pubblici
+- Sistema ibrido base64 + Drive fallback
 
-### 💡 **Problemi Risolti in Questa Sessione**
-1. **Error JavaScript**: Corretto `supplierWithImages` undefined
-2. **Component Architecture**: Tutti i componenti usano hook lazy loading
-3. **Debug System**: Sistema logging completo implementato
-4. **Issue Identification**: Problema identificato con precisione (corruzione a monte)
+**Conclusione**: Il sistema base64 embedded è la soluzione più robusta per questo tipo di applicazione.
 
-### 🔧 Note Tecniche Importanti
-- **Sync Strategy**: Manuale, funziona correttamente
-- **Data Storage**: Team Drive root per `suppliers.json` (ora 50KB) e immagini separate
-- **Image System**: Architettura corretta ma bloccata da problema Google Drive
-- **Mobile Support**: PWA funzionale, solo immagini non visualizzate
-
----
-
-**Ultima Sessione**: Identificato problema critico visualizzazione immagini. Causa: corruzione dati binari da Google Drive API. Prossimo step: implementare sistema URL diretto invece di download binary. Sistema ottimizzato pronto, solo questo ostacolo da superare.
+### 🚀 **Note Tecniche**
+- **File Size**: suppliers.json può crescere (OK per ~50-100 fornitori)
+- **Performance**: localStorage gestisce file fino a 10MB senza problemi
+- **Sync**: Manuale via pulsante "Salva su Drive"
+- **Team Drive**: Configurato e funzionante per condivisione team
