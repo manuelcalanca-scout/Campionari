@@ -402,7 +402,7 @@ export const SupplierDetailView: React.FC<SupplierDetailViewProps> = ({
         <Header
           supplierName={supplier.name}
           onSupplierNameChange={onSupplierNameChange}
-          data={supplierWithImages.headerData}
+          data={supplier.headerData}
           onChange={onHeaderChange}
           onBusinessCardChange={onBusinessCardChange}
           onBack={onBack}
@@ -411,7 +411,7 @@ export const SupplierDetailView: React.FC<SupplierDetailViewProps> = ({
           onDelete={handleDeleteClick}
         />
         <ItemList
-          items={supplierWithImages.items}
+          items={supplier.items}
           onItemChange={onItemChange}
           onAddItemImages={onAddItemImages}
           onRemoveItemImage={onRemoveItemImage}
