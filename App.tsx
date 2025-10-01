@@ -389,9 +389,9 @@ const AppContent: React.FC = () => {
             onBusinessCardChange={(file) => handleBusinessCardChange(selectedSupplier.id, file)}
             onItemChange={(itemId, e) => handleItemChange(selectedSupplier.id, itemId, e)}
             onAddItemImages={(itemId, files) => handleAddItemImages(selectedSupplier.id, itemId, files)}
-            onRemoveItemImage={(itemId, index) => handleRemoveItemImage(selectedSupplier.id, itemId, index)}
+            onRemoveItemImage={handleRemoveItemImage}
             onAddItem={() => handleAddItem(selectedSupplier.id)}
-            onRemoveItem={(itemId) => handleRemoveItem(selectedSupplier.id, itemId)}
+            onRemoveItem={handleRemoveItem}
             onRemoveSupplier={handleRemoveSupplier}
             onBack={() => setSelectedSupplierId(null)}
           />
