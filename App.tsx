@@ -76,6 +76,12 @@ const AppContent: React.FC = () => {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(syncService.getSyncStatus());
 
   const updateSuppliers = useCallback((updater: (prev: Supplier[]) => Supplier[], changedSupplierId?: string, changedItemId?: string) => {
+    // Debug logging to catch who calls without itemId
+    if (changedSupplierId && !changedItemId) {
+      console.log('⚠️ updateSuppliers called with supplierId but NO itemId');
+      console.log('Stack trace:', new Error().stack);
+    }
+
     setSuppliers(prev => {
         const newSuppliers = updater(prev);
         syncService.saveLocally(newSuppliers, changedSupplierId, changedItemId);
@@ -234,7 +240,8 @@ const AppContent: React.FC = () => {
                 }
               : supplier
           ),
-          supplierId
+          supplierId,
+          itemId
         );
     } catch (error) {
         console.error("Error processing item images:", error);
