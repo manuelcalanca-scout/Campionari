@@ -92,6 +92,9 @@ const AppContent: React.FC = () => {
     }
   }, []);
 
+  // COMMENTED OUT: Reset functionality not needed in production
+  // Uncomment if you need to completely wipe all data (local + Drive)
+  /*
   const handleResetAll = useCallback(async () => {
     const confirmed = confirm(
       '⚠️ ATTENZIONE: Questa operazione cancellerà:\n\n' +
@@ -124,6 +127,7 @@ const AppContent: React.FC = () => {
       alert('⚠️ Reset parzialmente completato.\n\nDati locali cancellati, ma errore nella pulizia di Google Drive.\nControlla la console per dettagli.');
     }
   }, []);
+  */
 
   // Listen to sync status changes
   useEffect(() => {
@@ -335,6 +339,8 @@ const AppContent: React.FC = () => {
               >
                 {syncStatus.syncing ? 'Salvando...' : 'Salva su Drive'}
               </button>
+              {/* COMMENTED OUT: Reset button not needed in production */}
+              {/*
               <button
                 onClick={handleResetAll}
                 className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
@@ -342,6 +348,7 @@ const AppContent: React.FC = () => {
               >
                 🗑️ Reset
               </button>
+              */}
             </div>
           </div>
         </div>

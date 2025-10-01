@@ -11,7 +11,7 @@ declare global {
 const gapi = window.gapi;
 
 const APP_FOLDER_NAME = 'Campionari';
-const SUPPLIERS_FILE_NAME = 'suppliers.json'; // Legacy filename
+const SUPPLIERS_FILE_NAME = 'suppliers.json'; // LEGACY: Not used with granular storage
 const SUPPLIERS_INDEX_FILE_NAME = 'suppliers-index.json'; // New architecture
 const SHARED_DRIVE_ID = import.meta.env.VITE_SHARED_DRIVE_ID;
 
@@ -217,6 +217,7 @@ class GoogleDriveService {
     }
   }
 
+  // LEGACY: Only used by loadSuppliersNew (also legacy). Use loadSupplierComplete instead.
   async loadSingleSupplier(supplierId: string): Promise<Supplier | null> {
     try {
       this.setAuthToken();
@@ -320,6 +321,7 @@ class GoogleDriveService {
 
   // === FUNZIONI LEGACY (MANTENIAMO PER COMPATIBILITÀ) ===
 
+  // LEGACY: Not used - kept for reference only. Use saveSupplierHeader/saveSupplierItem instead.
   async saveSuppliers(suppliers: Supplier[]): Promise<void> {
     // Verifica che gapi sia inizializzato
     if (!gapi.client.drive) {
@@ -405,6 +407,7 @@ class GoogleDriveService {
     return index;
   }
 
+  // LEGACY: Not used - kept for reference only. Use loadSuppliersGranular instead.
   async loadSuppliersNew(): Promise<Supplier[]> {
     console.log('📚 Loading ALL suppliers (full load - use only for migration)...');
     try {
@@ -1388,11 +1391,12 @@ class GoogleDriveService {
   }
 
   // ==========================================
-  // MIGRATION FUNCTION
+  // GRANULAR ARCHITECTURE (Current Active System)
   // ==========================================
 
   /**
    * Load all suppliers with GRANULAR architecture
+   * This is the ACTIVE loading method used by the app.
    */
   async loadSuppliersGranular(): Promise<Supplier[]> {
     try {
@@ -1428,7 +1432,8 @@ class GoogleDriveService {
   }
 
   /**
-   * Migrate from monolithic to granular structure
+   * LEGACY: Migration from monolithic to granular structure
+   * NOT USED - Migration already completed. Kept for reference only.
    */
   async migrateToGranularStructure(): Promise<void> {
     console.log('🔄 Starting migration to granular structure...');

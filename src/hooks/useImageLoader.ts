@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import type { ImageFile } from '../types';
 import { googleDrive } from '../services/googleDrive';
 
+// Set to true to enable verbose image loading logs (useful for debugging)
+const DEBUG_IMAGE_LOADING = false;
+
 export interface ImageLoaderState {
   dataUrl: string | null;
   isLoading: boolean;
@@ -16,39 +19,43 @@ export const useImageLoader = (image: ImageFile | null): ImageLoaderState => {
   });
 
   useEffect(() => {
-    console.log('🖼️ useImageLoader:', {
-      hasImage: !!image,
-      imageName: image?.name,
-      hasDataUrl: !!image?.dataUrl,
-      hasDriveFileId: !!image?.driveFileId,
-      driveFileId: image?.driveFileId
-    });
+    if (DEBUG_IMAGE_LOADING) {
+      console.log('🖼️ useImageLoader:', {
+        hasImage: !!image,
+        imageName: image?.name,
+        hasDataUrl: !!image?.dataUrl,
+        hasDriveFileId: !!image?.driveFileId,
+        driveFileId: image?.driveFileId
+      });
+    }
 
     if (!image) {
-      console.log('🖼️ No image provided');
+      if (DEBUG_IMAGE_LOADING) console.log('🖼️ No image provided');
       setState({ dataUrl: null, isLoading: false, error: null });
       return;
     }
 
     // PRIORITÀ 1: Se ha dataUrl (base64), usalo sempre (modalità legacy/fallback)
     if (image.dataUrl) {
-      console.log('🖼️ Using base64 dataUrl for:', image.name);
+      if (DEBUG_IMAGE_LOADING) console.log('🖼️ Using base64 dataUrl for:', image.name);
       setState({ dataUrl: image.dataUrl, isLoading: false, error: null });
       return;
     }
 
     // PRIORITÀ 2: Se ha solo driveFileId, prova a caricare (modalità ottimizzata)
     if (image.driveFileId) {
-      console.log('🖼️ Attempting to load optimized version from Drive:', image.name);
+      if (DEBUG_IMAGE_LOADING) console.log('🖼️ Attempting to load optimized version from Drive:', image.name);
       setState(prev => ({ ...prev, isLoading: true, error: null }));
 
       googleDrive.loadImageData(image)
         .then(loadedImage => {
-          console.log('🖼️ Drive load result:', {
-            name: image.name,
-            success: !!loadedImage.dataUrl,
-            dataUrlLength: loadedImage.dataUrl?.length
-          });
+          if (DEBUG_IMAGE_LOADING) {
+            console.log('🖼️ Drive load result:', {
+              name: image.name,
+              success: !!loadedImage.dataUrl,
+              dataUrlLength: loadedImage.dataUrl?.length
+            });
+          }
 
           if (loadedImage.dataUrl) {
             setState({
@@ -76,7 +83,7 @@ export const useImageLoader = (image: ImageFile | null): ImageLoaderState => {
     }
 
     // PRIORITÀ 3: Nessun dato disponibile
-    console.log('🖼️ No image data available for:', image.name);
+    if (DEBUG_IMAGE_LOADING) console.log('🖼️ No image data available for:', image.name);
     setState({ dataUrl: null, isLoading: false, error: 'No image data available' });
   }, [image?.driveFileId, image?.dataUrl]);
 

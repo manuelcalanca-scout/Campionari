@@ -3,6 +3,9 @@ import type { ImageFile } from '../types';
 import { useImageLoader } from '../hooks/useImageLoader';
 import { BuildingStorefrontIcon } from './icons';
 
+// Set to true to enable verbose rendering logs (useful for debugging)
+const DEBUG_RENDER = false;
+
 interface BusinessCardImageProps {
   businessCard: ImageFile | null;
   className?: string;
@@ -11,12 +14,14 @@ interface BusinessCardImageProps {
 export const BusinessCardImage: React.FC<BusinessCardImageProps> = ({ businessCard, className = "" }) => {
   const { dataUrl, isLoading, error } = useImageLoader(businessCard);
 
-  console.log('🖼️ BusinessCardImage render:', {
-    hasBusinessCard: !!businessCard,
-    imageName: businessCard?.name,
-    driveFileId: businessCard?.driveFileId,
-    hookResult: { dataUrl: !!dataUrl, isLoading, error }
-  });
+  if (DEBUG_RENDER) {
+    console.log('🖼️ BusinessCardImage render:', {
+      hasBusinessCard: !!businessCard,
+      imageName: businessCard?.name,
+      driveFileId: businessCard?.driveFileId,
+      hookResult: { dataUrl: !!dataUrl, isLoading, error }
+    });
+  }
 
   if (!businessCard) {
     return (
@@ -66,7 +71,7 @@ export const BusinessCardImage: React.FC<BusinessCardImageProps> = ({ businessCa
         console.error('🖼️ Failed dataUrl:', dataUrl.substring(0, 100));
       }}
       onLoad={() => {
-        console.log('🖼️ Image loaded successfully:', businessCard.name);
+        if (DEBUG_RENDER) console.log('🖼️ Image loaded successfully:', businessCard.name);
       }}
     />
   );
