@@ -4,12 +4,13 @@ import { TrashIcon, FolderOpenIcon } from './icons';
 import { ItemImage } from './ItemImage';
 
 interface ItemCardProps {
+  supplierId: string;
   item: Item;
   index: number;
   onItemChange: (id: string, e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   onAddItemImages: (id: string, files: FileList | null) => void;
-  onRemoveItemImage: (id: string, index: number) => void;
-  onRemoveItem: (id: string) => void;
+  onRemoveItemImage: (supplierId: string, itemId: string, index: number) => void;
+  onRemoveItem: (supplierId: string, itemId: string) => void;
 }
 
 interface ItemFieldProps {
@@ -35,7 +36,7 @@ const ItemField: React.FC<ItemFieldProps> = ({ label, name, value, placeholder, 
     </div>
 );
 
-export const ItemCard: React.FC<ItemCardProps> = ({ item, index, onItemChange, onAddItemImages, onRemoveItemImage, onRemoveItem }) => {
+export const ItemCard: React.FC<ItemCardProps> = ({ supplierId, item, index, onItemChange, onAddItemImages, onRemoveItemImage, onRemoveItem }) => {
   const cameraInputRef = React.useRef<HTMLInputElement>(null);
   const galleryInputRef = React.useRef<HTMLInputElement>(null);
   
@@ -84,8 +85,8 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item, index, onItemChange, o
 
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-bold text-gray-700 bg-gray-200 px-3 py-1 rounded">ITEM {index + 1}</h3>
-        <button 
-            onClick={() => onRemoveItem(item.id)}
+        <button
+            onClick={() => onRemoveItem(supplierId, item.id)}
             className="absolute top-4 right-4 p-2 text-gray-400 rounded-full hover:bg-red-100 hover:text-red-600 transition-opacity"
             aria-label="Remove Item"
         >
@@ -138,7 +139,7 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item, index, onItemChange, o
                       key={idx}
                       image={image}
                       alt={image.name}
-                      onRemove={() => onRemoveItemImage(item.id, idx)}
+                      onRemove={() => onRemoveItemImage(supplierId, item.id, idx)}
                   />
               ))}
               <button

@@ -4,20 +4,22 @@ import { ItemCard } from './ItemCard';
 import { PlusIcon } from './icons';
 
 interface ItemListProps {
+  supplierId: string;
   items: Item[];
   onItemChange: (id: string, e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   onAddItemImages: (id: string, files: FileList | null) => void;
-  onRemoveItemImage: (id: string, index: number) => void;
+  onRemoveItemImage: (supplierId: string, itemId: string, index: number) => void;
   onAddItem: () => void;
-  onRemoveItem: (id: string) => void;
+  onRemoveItem: (supplierId: string, itemId: string) => void;
 }
 
-export const ItemList: React.FC<ItemListProps> = ({ items, onItemChange, onAddItemImages, onRemoveItemImage, onAddItem, onRemoveItem }) => {
+export const ItemList: React.FC<ItemListProps> = ({ supplierId, items, onItemChange, onAddItemImages, onRemoveItemImage, onAddItem, onRemoveItem }) => {
   return (
     <div className="divide-y-4 divide-black">
       {items.map((item, index) => (
         <ItemCard
           key={item.id}
+          supplierId={supplierId}
           item={item}
           index={index}
           onItemChange={onItemChange}

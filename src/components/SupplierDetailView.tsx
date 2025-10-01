@@ -12,9 +12,9 @@ interface SupplierDetailViewProps {
   onBusinessCardChange: (file: File | null) => void;
   onItemChange: (itemId: string, e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   onAddItemImages: (itemId: string, files: FileList | null) => void;
-  onRemoveItemImage: (itemId: string, index: number) => void;
+  onRemoveItemImage: (supplierId: string, itemId: string, index: number) => void;
   onAddItem: () => void;
-  onRemoveItem: (itemId: string) => void;
+  onRemoveItem: (supplierId: string, itemId: string) => void;
   onRemoveSupplier: (supplierId: string) => void;
   onBack: () => void;
 }
@@ -411,6 +411,7 @@ export const SupplierDetailView: React.FC<SupplierDetailViewProps> = ({
           onDelete={handleDeleteClick}
         />
         <ItemList
+          supplierId={supplier.id}
           items={supplier.items}
           onItemChange={onItemChange}
           onAddItemImages={onAddItemImages}
