@@ -76,12 +76,6 @@ const AppContent: React.FC = () => {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(syncService.getSyncStatus());
 
   const updateSuppliers = useCallback((updater: (prev: Supplier[]) => Supplier[], changedSupplierId?: string, changedItemId?: string) => {
-    // Debug logging to catch who calls without itemId
-    if (changedSupplierId && !changedItemId) {
-      console.log('⚠️ updateSuppliers called with supplierId but NO itemId');
-      console.log('Stack trace:', new Error().stack);
-    }
-
     setSuppliers(prev => {
         const newSuppliers = updater(prev);
         syncService.saveLocally(newSuppliers, changedSupplierId, changedItemId);
@@ -251,7 +245,6 @@ const AppContent: React.FC = () => {
   }, [updateSuppliers]);
 
   const handleRemoveItemImage = useCallback((supplierId: string, itemId: string, imageIndex: number) => {
-    console.log('🔥 handleRemoveItemImage called:', { supplierId, itemId, imageIndex });
     updateSuppliers(prevSuppliers =>
       prevSuppliers.map(supplier => {
         if (supplier.id === supplierId) {
