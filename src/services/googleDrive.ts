@@ -1086,10 +1086,16 @@ class GoogleDriveService {
   // HEADER OPERATIONS
   // ==========================================
 
-  async saveSupplierHeader(supplierId: string, name: string, headerData: any): Promise<void> {
+  async saveSupplierHeader(supplierId: string, name: string, headerData: any, itemOrder?: string[]): Promise<void> {
     this.setAuthToken();
     const fileName = `supplier-${supplierId}-header.json`;
-    const content = JSON.stringify({ id: supplierId, name, headerData }, null, 2);
+
+    // Include itemOrder in headerData if provided
+    const headerWithOrder = itemOrder
+      ? { ...headerData, itemOrder }
+      : headerData;
+
+    const content = JSON.stringify({ id: supplierId, name, headerData: headerWithOrder }, null, 2);
 
     console.log(`💾 Saving header for ${name} (${Math.round(content.length / 1024)}KB)...`);
     await this.createOrUpdateFile(fileName, content);
@@ -1211,6 +1217,36 @@ class GoogleDriveService {
   // FULL SUPPLIER OPERATIONS
   // ==========================================
 
+  /**
+   * Sort items by saved order from headerData.itemOrder
+   * Falls back to original array order if itemOrder is not available
+   */
+  private sortItemsByOrder(items: any[], itemOrder?: string[]): any[] {
+    if (!itemOrder || itemOrder.length === 0) {
+      return items;
+    }
+
+    // Create a map of itemId -> item for fast lookup
+    const itemMap = new Map(items.map(item => [item.id, item]));
+
+    // Build sorted array based on itemOrder
+    const sortedItems: any[] = [];
+
+    // Add items in the order specified by itemOrder
+    for (const itemId of itemOrder) {
+      const item = itemMap.get(itemId);
+      if (item) {
+        sortedItems.push(item);
+        itemMap.delete(itemId); // Remove to track what's left
+      }
+    }
+
+    // Append any items not in itemOrder (new items added since last save)
+    itemMap.forEach(item => sortedItems.push(item));
+
+    return sortedItems;
+  }
+
   async loadSupplierComplete(supplierId: string): Promise<Supplier | null> {
     try {
       this.setAuthToken();
@@ -1220,11 +1256,14 @@ class GoogleDriveService {
 
       const items = await this.loadAllSupplierItems(supplierId);
 
+      // Sort items according to saved order
+      const sortedItems = this.sortItemsByOrder(items, header.headerData.itemOrder);
+
       return {
         id: supplierId,
         name: header.name,
         headerData: header.headerData,
-        items
+        items: sortedItems
       };
     } catch (error) {
       console.error(`Error loading complete supplier ${supplierId}:`, error);

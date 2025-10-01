@@ -142,7 +142,9 @@ class SyncService {
           const supplier = localSuppliers.find(s => s.id === supplierId);
           if (supplier) {
             console.log(`💾 Saving header for ${supplier.name}...`);
-            await googleDrive.saveSupplierHeader(supplierId, supplier.name, supplier.headerData);
+            // Extract item order to preserve custom ordering
+            const itemOrder = supplier.items.map(item => item.id);
+            await googleDrive.saveSupplierHeader(supplierId, supplier.name, supplier.headerData, itemOrder);
           }
         }
 

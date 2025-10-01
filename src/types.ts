@@ -34,6 +34,7 @@ export interface HeaderData {
   samplesArrivingDate: string;
   notes: string;
   factoryType: 'TRADING' | 'FACTORY' | '';
+  itemOrder?: string[]; // Array of item IDs to preserve custom order
 }
 
 export interface Supplier {
