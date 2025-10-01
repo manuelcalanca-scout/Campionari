@@ -5,9 +5,8 @@ import { googleAuth } from './googleAuth';
 const LOCAL_STORAGE_KEY = 'product-spec-sheet-creator-suppliers';
 const LAST_SYNC_KEY = 'product-spec-sheet-creator-last-sync';
 const PENDING_CHANGES_KEY = 'product-spec-sheet-creator-pending-changes';
-const DIRTY_SUPPLIERS_KEY = 'product-spec-sheet-creator-dirty-suppliers'; // IDs dei fornitori modificati (old - per supplier intero)
-const DIRTY_HEADERS_KEY = 'product-spec-sheet-creator-dirty-headers'; // IDs dei fornitori con header modificato
-const DIRTY_ITEMS_KEY = 'product-spec-sheet-creator-dirty-items'; // Map supplierId -> Set<itemId>
+const DIRTY_HEADERS_KEY = 'product-spec-sheet-creator-dirty-headers';
+const DIRTY_ITEMS_KEY = 'product-spec-sheet-creator-dirty-items';
 
 export interface SyncStatus {
   isOnline: boolean;
@@ -24,10 +23,8 @@ class SyncService {
     hasPendingChanges: this.hasPendingChanges(),
     syncing: false
   };
-  private dirtySupplierIds: Set<string> = this.loadDirtySupplierIds(); // Legacy - per compatibilità
-  private dirtyHeaders: Set<string> = this.loadDirtyHeaders(); // Nuova architettura granulare
-  private dirtyItems: Map<string, Set<string>> = this.loadDirtyItems(); // Nuova architettura granulare
-  private useGranularStorage: boolean = localStorage.getItem('use-granular-storage') === 'true'; // Feature flag
+  private dirtyHeaders: Set<string> = this.loadDirtyHeaders();
+  private dirtyItems: Map<string, Set<string>> = this.loadDirtyItems();
 
   constructor() {
     window.addEventListener('online', this.handleOnline.bind(this));
@@ -53,7 +50,7 @@ class SyncService {
   onSyncStatusChange(callback: (status: SyncStatus) => void): () => void {
     this.syncCallbacks.push(callback);
     callback(this.currentSyncStatus);
-    
+
     return () => {
       const index = this.syncCallbacks.indexOf(callback);
       if (index > -1) {
@@ -67,72 +64,34 @@ class SyncService {
       console.log('💾 saveLocally called with:', {
         changedSupplierId,
         changedItemId,
-        useGranular: this.useGranularStorage,
-        currentDirtySuppliers: Array.from(this.dirtySupplierIds),
         currentDirtyHeaders: Array.from(this.dirtyHeaders),
         currentDirtyItems: Array.from(this.dirtyItems.entries()).map(([id, items]) => ({ id, items: Array.from(items) }))
       });
 
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(suppliers));
 
-      if (this.useGranularStorage) {
-        // NUOVA ARCHITETTURA GRANULARE
-        if (changedSupplierId && changedItemId) {
-          // Modifica item specifico
-          this.markItemDirty(changedSupplierId, changedItemId);
-        } else if (changedSupplierId) {
-          // Modifica header o operazione sul fornitore intero
-          this.markHeaderDirty(changedSupplierId);
-        } else {
-          // Fallback: marca tutto come dirty
-          console.log('⚠️ No changedSupplierId provided - marking ALL as dirty');
-          suppliers.forEach(s => {
-            this.markHeaderDirty(s.id);
-            s.items.forEach(item => this.markItemDirty(s.id, item.id));
-          });
-        }
+      // GRANULAR STORAGE: Track dirty headers and items
+      if (changedSupplierId && changedItemId) {
+        // Item-specific modification
+        this.markItemDirty(changedSupplierId, changedItemId);
+      } else if (changedSupplierId) {
+        // Header modification or supplier-wide operation
+        this.markHeaderDirty(changedSupplierId);
       } else {
-        // ARCHITETTURA LEGACY (supplier intero)
-        if (changedSupplierId) {
-          this.markSupplierDirty(changedSupplierId);
-        } else {
-          console.log('⚠️ No changedSupplierId provided - marking ALL suppliers as dirty');
-          suppliers.forEach(s => this.dirtySupplierIds.add(s.id));
-          this.saveDirtySupplierIds();
-          this.markPendingChanges();
-        }
+        // Fallback: mark all as dirty
+        console.log('⚠️ No changedSupplierId provided - marking ALL as dirty');
+        suppliers.forEach(s => {
+          this.markHeaderDirty(s.id);
+          s.items.forEach(item => this.markItemDirty(s.id, item.id));
+        });
       }
 
       console.log('💾 After saveLocally:', {
-        dirtySuppliers: Array.from(this.dirtySupplierIds),
         dirtyHeaders: Array.from(this.dirtyHeaders),
         dirtyItems: Array.from(this.dirtyItems.entries()).map(([id, items]) => ({ id, items: Array.from(items) }))
       });
 
       this.updateSyncStatus({ hasPendingChanges: true });
-    } catch (error) {
-      console.error('Error saving suppliers locally:', error);
-    }
-  }
-
-  saveLocallyAndSync(suppliers: Supplier[], changedSupplierId?: string): void {
-    try {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(suppliers));
-
-      // Marca fornitori dirty
-      if (changedSupplierId) {
-        this.markSupplierDirty(changedSupplierId);
-      } else {
-        suppliers.forEach(s => this.dirtySupplierIds.add(s.id));
-        this.saveDirtySupplierIds();
-        this.markPendingChanges();
-      }
-
-      this.updateSyncStatus({ hasPendingChanges: true });
-
-      if (this.currentSyncStatus.isOnline && googleAuth.isUserSignedIn()) {
-        this.syncToCloud();
-      }
     } catch (error) {
       console.error('Error saving suppliers locally:', error);
     }
@@ -163,67 +122,49 @@ class SyncService {
       const localSuppliers = this.loadLocally();
 
       if (this.hasPendingChanges()) {
-        if (this.useGranularStorage) {
-          // NUOVA ARCHITETTURA GRANULARE
-          console.log('💾 Saving to cloud with GRANULAR architecture...');
-          console.log('🔍 Dirty headers:', Array.from(this.dirtyHeaders));
-          console.log('🔍 Dirty items:', Array.from(this.dirtyItems.entries()).map(([id, items]) => ({
-            supplierId: id,
-            itemIds: Array.from(items)
-          })));
+        console.log('💾 Saving to cloud with GRANULAR architecture...');
+        console.log('🔍 Dirty headers:', Array.from(this.dirtyHeaders));
+        console.log('🔍 Dirty items:', Array.from(this.dirtyItems.entries()).map(([id, items]) => ({
+          supplierId: id,
+          itemIds: Array.from(items)
+        })));
 
-          // Crea copie per il salvataggio
-          const headersToCopy = new Set(this.dirtyHeaders);
-          const itemsToCopy = new Map(this.dirtyItems);
+        // Create copies for saving
+        const headersToCopy = new Set(this.dirtyHeaders);
+        const itemsToCopy = new Map(this.dirtyItems);
 
-          // Pulisci IMMEDIATAMENTE per evitare accumulo
-          this.clearDirtyHeaders();
-          this.clearDirtyItems();
+        // Clear IMMEDIATELY to prevent accumulation
+        this.clearDirtyHeaders();
+        this.clearDirtyItems();
 
-          // Salva headers modificati
-          for (const supplierId of headersToCopy) {
-            const supplier = localSuppliers.find(s => s.id === supplierId);
-            if (supplier) {
-              console.log(`💾 Saving header for ${supplier.name}...`);
-              await googleDrive.saveSupplierHeader(supplierId, supplier.name, supplier.headerData);
-            }
+        // Save modified headers
+        for (const supplierId of headersToCopy) {
+          const supplier = localSuppliers.find(s => s.id === supplierId);
+          if (supplier) {
+            console.log(`💾 Saving header for ${supplier.name}...`);
+            await googleDrive.saveSupplierHeader(supplierId, supplier.name, supplier.headerData);
           }
-
-          // Salva items modificati
-          for (const [supplierId, itemIds] of itemsToCopy) {
-            const supplier = localSuppliers.find(s => s.id === supplierId);
-            if (!supplier) continue;
-
-            for (const itemId of itemIds) {
-              const item = supplier.items.find(i => i.id === itemId);
-              if (item) {
-                console.log(`💾 Saving item ${item.itemCode || 'untitled'} for ${supplier.name}...`);
-                await googleDrive.saveSupplierItem(supplierId, item);
-              }
-            }
-          }
-
-          // Aggiorna index con timestamp selettivi
-          await googleDrive.saveGranularIndexSelective(localSuppliers, headersToCopy, itemsToCopy);
-
-          this.clearPendingChanges();
-          console.log('✅ Synced from local to cloud (GRANULAR)');
-        } else {
-          // ARCHITETTURA LEGACY (supplier intero)
-          console.log('💾 Saving to cloud with JSON-per-supplier architecture...');
-          console.log('🔍 Dirty suppliers:', Array.from(this.dirtySupplierIds));
-
-          // Crea una copia dei dirty IDs da salvare
-          const idsToSave = new Set(this.dirtySupplierIds);
-
-          // Pulisci IMMEDIATAMENTE i dirty IDs per evitare accumulo
-          this.clearDirtySupplierIds();
-
-          // Salva usando la copia
-          await googleDrive.saveSuppliersNew(localSuppliers, idsToSave);
-          this.clearPendingChanges();
-          console.log('✅ Synced from local to cloud (JSON-per-supplier)');
         }
+
+        // Save modified items
+        for (const [supplierId, itemIds] of itemsToCopy) {
+          const supplier = localSuppliers.find(s => s.id === supplierId);
+          if (!supplier) continue;
+
+          for (const itemId of itemIds) {
+            const item = supplier.items.find(i => i.id === itemId);
+            if (item) {
+              console.log(`💾 Saving item ${item.itemCode || 'untitled'} for ${supplier.name}...`);
+              await googleDrive.saveSupplierItem(supplierId, item);
+            }
+          }
+        }
+
+        // Update index with selective timestamps
+        await googleDrive.saveGranularIndexSelective(localSuppliers, headersToCopy, itemsToCopy);
+
+        this.clearPendingChanges();
+        console.log('✅ Synced from local to cloud (GRANULAR)');
       }
 
       const now = new Date().toISOString();
@@ -250,12 +191,8 @@ class SyncService {
     this.updateSyncStatus({ syncing: true });
 
     try {
-      // Use granular or legacy loading based on feature flag
-      const cloudSuppliers = this.useGranularStorage
-        ? await googleDrive.loadSuppliersGranular()
-        : await googleDrive.loadSuppliersNew();
-
-      console.log(`📥 Loaded from cloud using ${this.useGranularStorage ? 'GRANULAR' : 'LEGACY'} architecture`);
+      const cloudSuppliers = await googleDrive.loadSuppliersGranular();
+      console.log('📥 Loaded from cloud using GRANULAR architecture');
 
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(cloudSuppliers));
 
@@ -287,34 +224,6 @@ class SyncService {
 
   private clearPendingChanges(): void {
     localStorage.removeItem(PENDING_CHANGES_KEY);
-  }
-
-  private loadDirtySupplierIds(): Set<string> {
-    try {
-      const saved = localStorage.getItem(DIRTY_SUPPLIERS_KEY);
-      return saved ? new Set(JSON.parse(saved)) : new Set();
-    } catch (error) {
-      return new Set();
-    }
-  }
-
-  private saveDirtySupplierIds(): void {
-    localStorage.setItem(DIRTY_SUPPLIERS_KEY, JSON.stringify(Array.from(this.dirtySupplierIds)));
-  }
-
-  private clearDirtySupplierIds(): void {
-    console.log('🧹 Clearing dirty suppliers. Before:', Array.from(this.dirtySupplierIds));
-    this.dirtySupplierIds.clear();
-    localStorage.removeItem(DIRTY_SUPPLIERS_KEY);
-    console.log('🧹 After clear:', Array.from(this.dirtySupplierIds));
-  }
-
-  markSupplierDirty(supplierId: string): void {
-    console.log('🏷️ Marking supplier as dirty:', supplierId, '| Current dirty:', Array.from(this.dirtySupplierIds));
-    this.dirtySupplierIds.add(supplierId);
-    this.saveDirtySupplierIds();
-    this.markPendingChanges();
-    console.log('🏷️ After marking, dirty IDs:', Array.from(this.dirtySupplierIds));
   }
 
   // ==========================================
@@ -390,18 +299,6 @@ class SyncService {
     this.dirtyItems.get(supplierId)!.add(itemId);
     this.saveDirtyItems();
     this.markPendingChanges();
-  }
-
-  enableGranularStorage(): void {
-    localStorage.setItem('use-granular-storage', 'true');
-    this.useGranularStorage = true;
-    console.log('✅ Granular storage ENABLED');
-  }
-
-  disableGranularStorage(): void {
-    localStorage.setItem('use-granular-storage', 'false');
-    this.useGranularStorage = false;
-    console.log('⚠️ Granular storage DISABLED (fallback to legacy)');
   }
 
   getSyncStatus(): SyncStatus {
