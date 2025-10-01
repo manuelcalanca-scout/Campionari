@@ -216,7 +216,8 @@ const AppContent: React.FC = () => {
             }
           : supplier
       ),
-      supplierId
+      supplierId,
+      itemId
     );
   }, [updateSuppliers]);
   
