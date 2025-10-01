@@ -161,8 +161,8 @@ const AppContent: React.FC = () => {
   }, [updateSuppliers]);
   
   const handleRemoveSupplier = useCallback((supplierId: string) => {
-    // Remove from local state
-    updateSuppliers(prev => prev.filter(s => s.id !== supplierId));
+    // Remove from local state (pass '' to skip dirty tracking - deletion handled separately)
+    updateSuppliers(prev => prev.filter(s => s.id !== supplierId), '');
 
     // Mark for deletion on Drive (deferred until "Salva su Drive")
     syncService.markSupplierDeleted(supplierId);
@@ -291,14 +291,14 @@ const AppContent: React.FC = () => {
   }, [updateSuppliers]);
 
   const handleRemoveItem = useCallback((supplierId: string, itemId: string) => {
-    // Remove from local state
+    // Remove from local state (pass '' to skip dirty tracking - deletion handled separately)
     updateSuppliers(prev =>
       prev.map(s =>
         s.id === supplierId
           ? { ...s, items: s.items.filter(item => item.id !== itemId) }
           : s
       ),
-      supplierId
+      ''
     );
 
     // Mark for deletion on Drive (deferred until "Salva su Drive")

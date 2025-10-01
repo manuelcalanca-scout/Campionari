@@ -75,7 +75,10 @@ class SyncService {
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(suppliers));
 
       // GRANULAR STORAGE: Track dirty headers and items
-      if (changedSupplierId && changedItemId) {
+      if (changedSupplierId === '') {
+        // Empty string means: skip dirty tracking (deletion case)
+        console.log('⏭️ Skipping dirty tracking (deletion handled separately)');
+      } else if (changedSupplierId && changedItemId) {
         // Item-specific modification
         this.markItemDirty(changedSupplierId, changedItemId);
         // ALSO mark header as dirty to save updated itemOrder array
