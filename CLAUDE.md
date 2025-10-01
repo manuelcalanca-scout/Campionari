@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Panoramica del Progetto
 
-Applicazione React multi-piattaforma per la gestione di cataloghi fornitori e campioni di prodotto con sincronizzazione cloud tramite Google Drive. L'app funziona come PWA (Progressive Web App) e supporta modalità offline-first con sincronizzazione automatica.
+Applicazione React multi-piattaforma per la gestione di cataloghi fornitori e campioni di prodotto con sincronizzazione cloud tramite Google Drive. L'app funziona come PWA (Progressive Web App) e supporta modalità offline-first con sincronizzazione manuale.
 
 ## Comandi Comuni
 
@@ -17,7 +17,6 @@ Applicazione React multi-piattaforma per la gestione di cataloghi fornitori e ca
 
 ### Struttura Principale
 - **App.tsx**: Componente root che gestisce l'autenticazione e il routing tra vista lista e dettaglio
-- **AppContent**: Componente principale che gestisce stato suppliers, handlers e persistenza
 - **src/types.ts**: Interfacce TypeScript centrali (Supplier, Item, HeaderData, ImageFile)
 - **src/components/**: Componenti React riutilizzabili
 - **src/services/**: Servizi per Google Auth, Google Drive e sincronizzazione
@@ -32,11 +31,11 @@ Applicazione React multi-piattaforma per la gestione di cataloghi fornitori e ca
 - **Modal**: Dialoghi conferma per eliminazioni
 
 ### Gestione dello Stato
-- Stato centralizzato in AppContent usando useState per suppliers array
+- Stato centralizzato in App.tsx usando useState per suppliers array
 - Tutti gli update tramite callback `updateSuppliers` che:
   - Applica modifiche immutabili
   - Salva automaticamente in localStorage via syncService
-  - Mantiene sincronizzazione con Google Drive
+  - Traccia modifiche con dirty tracking granulare
 - Nessuna libreria esterna per state management (no Redux/Zustand)
 
 ### Struttura Dati Core
@@ -54,6 +53,7 @@ HeaderData {
   booth: string
   madeIn: string
   factoryType: 'TRADING' | 'FACTORY' | ''
+  itemOrder?: string[]  // Preserva ordine custom degli items
   // + altri campi
 }
 
@@ -69,54 +69,61 @@ Item {
 }
 ```
 
-### Sincronizzazione Cloud
+## 🚀 Architettura Storage Granulare (Sistema Attuale)
 
-#### Architettura Storage (Dual Mode)
-L'app supporta DUE architetture di storage, con feature flag per passare da una all'altra:
-
-**1. LEGACY: JSON-per-Supplier (Monolitico)**
+### Struttura File su Google Drive
 ```
-Drive/
-├── suppliers-index.json (metadata fornitori)
-├── supplier-{id}.json (tutto il fornitore: header + items)
-└── supplier-{id}.json
-```
-- **Pro**: Semplice, singolo file per fornitore
-- **Contro**: File grandi (fino a 4MB), sync lento su modifiche piccole
-- **Uso**: Default iniziale, fallback sicuro
-
-**2. GRANULAR: Header + Items Separati** (🆕 Ottimizzato)
-```
-Drive/
+Drive/Campionari/
 ├── suppliers-index.json (metadata + timestamp per header/items)
-├── supplier-{id}-header.json (solo metadati + business card ~5KB)
-├── supplier-{id}-item-{itemId}.json (singolo prodotto ~200KB)
+├── supplier-{id}-header.json (metadati + business card ~5-50KB)
+├── supplier-{id}-item-{itemId}.json (singolo prodotto ~20-800KB)
 ├── supplier-{id}-item-{itemId}.json
 └── ...
 ```
-- **Pro**: Sync ultra-veloce (95% riduzione dati), zero conflitti multi-utente
-- **Contro**: Più file, complessità gestione
-- **Uso**: Dopo migrazione, per performance ottimali
 
-#### Dirty Tracking Granulare
-- **Legacy Mode**: Traccia fornitori modificati (`Set<supplierId>`)
-- **Granular Mode**:
-  - `dirtyHeaders: Set<supplierId>` - Headers modificati
-  - `dirtyItems: Map<supplierId, Set<itemId>>` - Items modificati per fornitore
-- Salva SOLO file effettivamente modificati (non tutto il fornitore)
+**Vantaggi:**
+- ✅ Sync ultra-veloce (95% riduzione dati rispetto a file monolitici)
+- ✅ Zero conflitti multi-utente (ogni modifica tocca solo il file specifico)
+- ✅ Timestamp granulare per ogni header e item
+- ✅ Ordine items preservato tramite `itemOrder` array
 
-#### Servizi
+### Dirty Tracking Granulare
+
+**Modifiche tracciate separatamente:**
+- `dirtyHeaders: Set<supplierId>` - Headers modificati
+- `dirtyItems: Map<supplierId, Set<itemId>>` - Items modificati per fornitore
+- `deletedSuppliers: Set<supplierId>` - Fornitori da cancellare
+- `deletedItems: Map<supplierId, Set<itemId>>` - Items da cancellare
+
+**Salvataggio differito:** Tutte le modifiche vengono tracciate localmente e sincronizzate su Drive solo quando l'utente clicca "Salva su Drive".
+
+### Processo di Sync
+
+**Quando si modifica qualcosa:**
+1. Modifica applicata immediatamente all'array locale → UI si aggiorna
+2. Modifica tracciata nei Set/Map di dirty tracking
+3. Indicatore "⚠️ Modifiche non salvate" appare
+
+**Quando si clicca "Salva su Drive":**
+1. Processa cancellazioni (elimina file da Drive + aggiorna index)
+2. Salva headers modificati (solo quelli dirty)
+3. Salva items modificati (solo quelli dirty)
+4. Aggiorna `suppliers-index.json` con nuovi timestamp
+5. Pulisce tutti i Set/Map di dirty tracking
+
+### Servizi
+
 - **googleAuth.ts**: OAuth Google con scope Drive e profilo
 - **googleDrive.ts**:
-  - API wrapper per upload/download files
-  - Funzioni granulari: `saveSupplierHeader()`, `saveSupplierItem()`, `loadSupplierComplete()`
-  - Migrazione automatica: `migrateToGranularStructure()`
+  - API wrapper per upload/download files granulari
+  - Funzioni principali: `saveSupplierHeader()`, `saveSupplierItem()`, `loadSupplierComplete()`
+  - Funzioni delete: `deleteSupplierComplete()`, `deleteSupplierItem()`
+  - Funzioni index: `saveGranularIndexSelective()`, `removeSupplierFromIndex()`, `removeItemFromIndex()`
 - **syncService.ts**:
   - Orchestratore sync tra localStorage e Google Drive
-  - Feature flag: `enableGranularStorage()` / `disableGranularStorage()`
-  - Dirty tracking per header/items con clear immediato post-sync
-- Salvataggio automatico locale + sync cloud in background
-- Gestione conflitti e offline-first approach
+  - Dirty tracking granulare per headers, items, deletions
+  - Salvataggio locale immediato, sync cloud differito
+  - Gestione conflitti e offline-first approach
 
 ### Tecnologie e Build
 - **Frontend**: React 18 + TypeScript strict
@@ -129,9 +136,10 @@ Drive/
 
 ### Gestione Immagini
 - Tutte le immagini convertite in data URL base64 via FileReader
-- Storage completo in localStorage e Google Drive come JSON
+- Storage completo in localStorage e Google Drive come JSON embedded
 - Supporto multi-formato (JPEG, PNG, etc.) con preview immediate
 - Nessun server backend necessario per image hosting
+- Sistema semplice, robusto e offline-first
 
 ## Configurazione Ambiente
 
@@ -139,6 +147,7 @@ Drive/
 2. **Environment Variables**:
    - `VITE_GOOGLE_CLIENT_ID`: OAuth client ID
    - `VITE_GOOGLE_API_KEY`: Google API key
+   - `VITE_SHARED_DRIVE_ID`: (Opzionale) ID del Team Drive condiviso
 3. **File**: `.env` per produzione, `.env.local` per sviluppo locale
 
 ## Pattern di Sviluppo
@@ -149,6 +158,8 @@ Drive/
 - **TypeScript**: Strict typing su tutte le interfacce e props
 - **Immutability**: Update state sempre con spread operator e map/filter
 - **File Conversion**: Async/await pattern per FileReader operations
+- **Dirty Tracking**: Passa `changedSupplierId` e `changedItemId` a `updateSuppliers()`
+  - Per cancellazioni: passa `''` come `changedSupplierId` per skip dirty tracking
 
 ## Deployment e Produzione
 
@@ -160,9 +171,7 @@ Drive/
 
 ### Team Drive Configuration
 - **Google Team Drive**: "Campionari" per condivisione dati tra utenti
-- **File Structure**:
-  - `suppliers.json` - Dati principali condivisi
-  - `*.jpg/*.png` - Immagini prodotti direttamente in root (no sottocartelle)
+- **File Structure**: Architettura granulare con file separati per header e items
 - **Sincronizzazione**: Manuale tramite pulsante "Salva su Drive"
 
 ### Autenticazione Google
@@ -170,148 +179,81 @@ Drive/
 - **API Credentials**: Gestite tramite GitHub Secrets
 - **Scopes**: Google Drive API + Google People API
 
-## Stato Attuale del Progetto
+## Debug e Logging
 
-### ✅ Completato
-1. **App Core**: Interfaccia completa per gestione fornitori e prodotti
-2. **PWA**: Funzionalità offline con Service Worker e caching
-3. **Google Auth**: Migrazione da gapi-script deprecato a Google Identity Services
-4. **Team Drive Sync**: Configurazione corretta per condivisione dati team
-5. **GitHub Deployment**: Pipeline automatica con secrets configurati
-6. **Manual Sync**: Pulsante salvataggio manuale con indicatori di stato
-7. **Mobile Ready**: App testata e funzionante da dispositivi mobile
+### Flag di Debug (Produzione: Disabilitati)
 
-### 🔧 Implementazioni Recenti
-- **Risolto Race Conditions**: Separazione salvataggio locale da sync cloud
-- **UX Sync**: Indicatori visivi stato sincronizzazione (🔄 ⚠️ ✅)
-- **Team Drive Fix**: Uso diretto root drive invece sottocartelle
-- **Build Compatibility**: Fix crypto.randomUUID() per production builds
+Per riattivare i log verbosi quando necessario:
 
-## ✅ SISTEMA FUNZIONANTE - Base64 in suppliers.json
+**Logs caricamento immagini:**
+- File: `src/hooks/useImageLoader.ts`
+- Flag: `DEBUG_IMAGE_LOADING = false` → cambia a `true`
 
-### 🎯 **Soluzione Implementata (30/09/2025)**
-**APPROCCIO**: Mantenere immagini base64 embedded direttamente nel file `suppliers.json`
+**Logs rendering componenti immagine:**
+- File: `src/components/BusinessCardImage.tsx`, `ItemImage.tsx`, `ImageUploader.tsx`
+- Flag: `DEBUG_RENDER = false` → cambia a `true`
 
-**DECISIONE ARCHITETTURALE**:
-- ❌ Sistema immagini separate su Drive non affidabile (corruzione dati binari)
-- ❌ URL diretti richiedono permessi pubblici complessi
-- ✅ **Base64 embedded funziona sempre** - semplice, robusto, offline-first
+**Reset completo app (emergenze):**
+- File: `App.tsx` linee 95-130 e 342-351
+- Decommenta `handleResetAll` e il pulsante Reset nell'UI
 
-### 📊 **Stato Finale Sistema**
-- ✅ Immagini base64 salvate in `suppliers.json`
-- ✅ `useImageLoader` prioritizza base64 (sempre disponibile)
-- ✅ Componenti BusinessCardImage/ItemImage funzionanti
-- ✅ Caricamento fornitori corretto
-- ✅ Export Excel con immagini funzionante
-- ✅ App completamente operativa
+### Log Importanti (Sempre Attivi)
 
-### 🏗️ **Architettura Attuale**
-```
-Google Drive /Campionari/
-└── 📄 suppliers.json  (completo con base64 embedded)
-```
+Console mostra questi log critici:
+- `💾 Saving to cloud with GRANULAR architecture...`
+- `🔍 Dirty headers:`, `🔍 Dirty items:`, `🗑️ Deleted suppliers:`, `🗑️ Deleted items:`
+- `✅ Synced from local to cloud (GRANULAR)`
+- Errori: sempre loggati con dettagli per debugging
 
-**Vantaggi Sistema Corrente**:
-1. **Affidabilità**: Base64 sempre disponibile, no dipendenze esterne
-2. **Semplicità**: Un solo file da sincronizzare
-3. **Offline-First**: Funziona senza connessione dopo primo caricamento
-4. **Compatibilità**: Nessun problema di CORS/permessi/encoding
-5. **Manutenibilità**: Meno punti di fallimento
+## Stato Attuale del Progetto (Ottobre 2025)
 
-### 🔧 **Fix Applicati (Sessione 30/09/2025)**
-1. ✅ Errore `SUPPLIERS_FILE_NAME` undefined risolto
-2. ✅ Errore `supplierWithImages` scope risolto
-3. ✅ Ripristinato sistema base64 funzionante
-4. ✅ Rimossi pulsanti test sperimentali
-5. ✅ Pulizia codice non utilizzato
+### ✅ Sistema Completamente Funzionante
 
-### 🧪 **Esperimenti Tentati (Non Implementati)**
-- Sistema JSON per fornitore separato
-- Download immagini da Drive con conversione binary
-- URL diretti Google Drive con permessi pubblici
-- Sistema ibrido base64 + Drive fallback
+1. **Architettura Granulare**: Implementata e testata in produzione
+2. **Dirty Tracking**: Header, items e cancellazioni tracciate separatamente
+3. **Item Ordering**: Ordine items preservato tramite `itemOrder` array
+4. **Deferred Deletion**: Cancellazioni differite fino a sync manuale
+5. **Sync Ottimizzato**: Solo file modificati vengono salvati (95% riduzione dati)
+6. **UI Pulita**: Log di debug disabilitati in produzione
+7. **Codice Documentato**: Funzioni legacy marcate con commenti LEGACY
 
-**Conclusione**: Il sistema base64 embedded è la soluzione più robusta per questo tipo di applicazione.
+### 📊 Performance Attuale
 
-### 🚀 **Note Tecniche**
-- **File Size**: suppliers.json può crescere (OK per ~50-100 fornitori)
-- **Performance**: localStorage gestisce file fino a 10MB senza problemi
-- **Sync**: Manuale via pulsante "Salva su Drive"
-- **Team Drive**: Configurato e funzionante per condivisione team
+| Operazione | Dati Trasferiti | Tempo (4G) |
+|------------|-----------------|------------|
+| Modifica 1 campo header | ~5KB | ~0.1s |
+| Modifica 1 immagine item | ~200KB | ~0.4s |
+| Cancella 1 item | ~1KB (solo index) | <0.1s |
+| Cancella 1 fornitore | ~10KB | ~0.2s |
 
----
+### 🔧 Funzionalità Chiave
 
-## 🚀 STORAGE GRANULARE (Implementato 30/09/2025)
+- ✅ Sincronizzazione manuale con indicatore stato
+- ✅ Offline-first con localStorage
+- ✅ Dirty tracking granulare (header/item/delete separati)
+- ✅ Ordine items preservato
+- ✅ Export Excel con immagini embedded
+- ✅ PWA con Service Worker
+- ✅ Multi-utente senza conflitti
+- ✅ Mobile-ready e responsive
 
-### ✅ **Stato Attuale**
-L'app supporta **DUE architetture** di storage con switch automatico:
+### 📝 Codice Legacy (Mantenuto per Riferimento)
 
-1. **Legacy Mode** (Default): File monolitico per fornitore
-   - `supplier-{id}.json` contiene header + tutti gli items
-   - File fino a 4MB, sync intero fornitore ad ogni modifica
+Funzioni non più usate ma mantenute:
+- `saveSuppliers()` - Usa `saveSupplierHeader/Item` invece
+- `loadSuppliersNew()` - Usa `loadSuppliersGranular` invece
+- `loadSingleSupplier()` - Usa `loadSupplierComplete` invece
+- `migrateToGranularStructure()` - Migrazione già completata
+- `handleResetAll()` - Commentato, disponibile per emergenze
 
-2. **Granular Mode** (Ottimizzato): File separati header + items
-   - `supplier-{id}-header.json` (~5KB)
-   - `supplier-{id}-item-{itemId}.json` (~200KB per item)
-   - Sync solo file modificato (95% riduzione dati)
-
-### 🎯 **Migrazione a Granular Mode**
-
-**Come Migrare:**
-1. Apri l'app in produzione
-2. Assicurati di avere backup dei dati
-3. Clicca pulsante **"🚀 Migra Granulare"**
-4. Conferma migrazione
-5. Attendi completamento (crea file separati, cancella vecchi)
-6. App ricarica automaticamente con nuova architettura
-
-**Cosa Succede Durante Migrazione:**
-- Legge tutti i fornitori da file monolitici
-- Crea file separati: 1 header + N items per fornitore
-- Cancella vecchi file monolitici
-- Aggiorna `suppliers-index.json` con timestamp granulari
-- Abilita feature flag `use-granular-storage=true`
-
-**Post-Migrazione:**
-- ✅ Modifiche 20x più veloci
-- ✅ Zero conflitti multi-utente
-- ✅ Sync solo file modificato (es. 200KB invece di 4MB)
-- ✅ Timestamp preciso per header/items singoli
-
-### 📊 **Performance Comparison**
-
-| Operazione | Legacy | Granular | Miglioramento |
-|------------|--------|----------|---------------|
-| Modifica 1 foto | 4MB sync | 200KB sync | **95%** |
-| Tempo sync 4G | ~8s | ~0.4s | **20x** |
-| Conflitti 2 utenti | Alto | Zero | ✅ |
-| Caricamento fornitore | 3s (4MB) | 0.1s (5KB header) | **30x** |
-
-### 🔧 **Rollback**
-Se necessario tornare a legacy:
-```javascript
-syncService.disableGranularStorage();
-// File granulari rimangono su Drive come backup
-```
-
-### 🚨 **Note Importanti**
-- Migrazione **irreversibile** (file vecchi cancellati)
-- Fare **backup** prima di migrare
-- Feature flag `use-granular-storage` in localStorage
-- Compatibilità: Nuove installazioni usano Legacy di default
-
-### 📁 **File Generati Post-Migrazione**
-```
-Drive/
-├── suppliers-index.json (350B - metadata + timestamp per item)
-├── supplier-764cee0e...-header.json (5KB)
-├── supplier-764cee0e...-item-abc123.json (200KB)
-├── supplier-764cee0e...-item-def456.json (150KB)
-├── supplier-658bca5c...-header.json (5KB)
-├── supplier-658bca5c...-item-xyz789.json (800KB)
-└── ... (totale: 1 index + N_suppliers × (1 header + M_items))
-```
+Tutte marcate con commenti `// LEGACY:` nel codice.
 
 ---
 
-**Ultima Sessione (30/09/2025)**: Implementato storage granulare completo con dirty tracking item-level. Sistema testato e pronto per migrazione. Performance migliorata 95%. Pulsante migrazione disponibile nell'UI.
+**Ultima Sessione (01/10/2025)**:
+- Implementato deferred deletion con tracking separato
+- Risolto bug dirty tracking su cancellazioni
+- Rimosso pulsante Reset dall'UI (commentato)
+- Ridotti log verbosi in produzione (flag DEBUG)
+- Documentate funzioni legacy
+- Sistema stabile e pronto per produzione
