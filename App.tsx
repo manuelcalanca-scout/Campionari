@@ -279,6 +279,7 @@ const AppContent: React.FC = () => {
   }, [updateSuppliers]);
 
   const handleRemoveItemImage = useCallback((supplierId: string, itemId: string, imageIndex: number) => {
+    console.log('🔥 handleRemoveItemImage called:', { supplierId, itemId, imageIndex });
     updateSuppliers(prevSuppliers =>
       prevSuppliers.map(supplier => {
         if (supplier.id === supplierId) {
