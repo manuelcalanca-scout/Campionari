@@ -1201,6 +1201,9 @@ class GoogleDriveService {
       await this.deleteFileById(file.id);
       console.log(`🗑️ Deleted item: ${fileName}`);
     }
+
+    // Remove from index
+    await this.removeItemFromIndex(supplierId, itemId);
   }
 
   async deleteAllSupplierItems(supplierId: string): Promise<void> {
@@ -1282,6 +1285,9 @@ class GoogleDriveService {
     // Delete all items
     await this.deleteAllSupplierItems(supplierId);
 
+    // Remove from index
+    await this.removeSupplierFromIndex(supplierId);
+
     console.log(`✅ Supplier ${supplierId} deleted completely`);
   }
 
@@ -1329,6 +1335,56 @@ class GoogleDriveService {
 
     await this.createOrUpdateFile('suppliers-index.json', JSON.stringify(index, null, 2));
     console.log('📋 Granular index updated');
+  }
+
+  async removeSupplierFromIndex(supplierId: string): Promise<void> {
+    this.setAuthToken();
+
+    try {
+      // Load existing index
+      const existingIndex = await this.loadSuppliersIndex();
+
+      // Remove supplier from index
+      const updatedIndex = {
+        suppliers: existingIndex.suppliers.filter((s: any) => s.id !== supplierId),
+        lastUpdated: new Date().toISOString()
+      };
+
+      await this.createOrUpdateFile('suppliers-index.json', JSON.stringify(updatedIndex, null, 2));
+      console.log(`📋 Removed supplier ${supplierId} from index`);
+    } catch (error) {
+      console.error('Error removing supplier from index:', error);
+      throw error;
+    }
+  }
+
+  async removeItemFromIndex(supplierId: string, itemId: string): Promise<void> {
+    this.setAuthToken();
+
+    try {
+      // Load existing index
+      const existingIndex = await this.loadSuppliersIndex();
+
+      // Update supplier to remove item
+      const updatedIndex = {
+        suppliers: existingIndex.suppliers.map((s: any) => {
+          if (s.id === supplierId) {
+            return {
+              ...s,
+              items: s.items.filter((item: any) => item.id !== itemId)
+            };
+          }
+          return s;
+        }),
+        lastUpdated: new Date().toISOString()
+      };
+
+      await this.createOrUpdateFile('suppliers-index.json', JSON.stringify(updatedIndex, null, 2));
+      console.log(`📋 Removed item ${itemId} from index`);
+    } catch (error) {
+      console.error('Error removing item from index:', error);
+      throw error;
+    }
   }
 
   // ==========================================
