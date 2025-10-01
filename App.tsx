@@ -160,20 +160,12 @@ const AppContent: React.FC = () => {
     setSelectedSupplierId(newSupplier.id);
   }, [updateSuppliers]);
   
-  const handleRemoveSupplier = useCallback(async (supplierId: string) => {
-    // Remove from local state first
+  const handleRemoveSupplier = useCallback((supplierId: string) => {
+    // Remove from local state
     updateSuppliers(prev => prev.filter(s => s.id !== supplierId));
 
-    // Delete from Google Drive if signed in (includes index update)
-    if (googleAuth.isUserSignedIn()) {
-      try {
-        await googleDrive.deleteSupplierComplete(supplierId);
-        console.log(`✅ Supplier ${supplierId} removed from local and Drive`);
-      } catch (error) {
-        console.error('Error deleting supplier from Drive:', error);
-        alert('Fornitore rimosso localmente, ma errore durante cancellazione su Drive. Riprova il salvataggio.');
-      }
-    }
+    // Mark for deletion on Drive (deferred until "Salva su Drive")
+    syncService.markSupplierDeleted(supplierId);
   }, [updateSuppliers]);
 
   const handleSupplierNameChange = useCallback((supplierId: string, e: React.ChangeEvent<HTMLInputElement>) => {
@@ -298,8 +290,8 @@ const AppContent: React.FC = () => {
     );
   }, [updateSuppliers]);
 
-  const handleRemoveItem = useCallback(async (supplierId: string, itemId: string) => {
-    // Remove from local state first
+  const handleRemoveItem = useCallback((supplierId: string, itemId: string) => {
+    // Remove from local state
     updateSuppliers(prev =>
       prev.map(s =>
         s.id === supplierId
@@ -309,16 +301,8 @@ const AppContent: React.FC = () => {
       supplierId
     );
 
-    // Delete from Google Drive if signed in
-    if (googleAuth.isUserSignedIn()) {
-      try {
-        await googleDrive.deleteSupplierItem(supplierId, itemId);
-        console.log(`🗑️ Deleted item ${itemId} from Drive`);
-      } catch (error) {
-        console.error('Error deleting item from Drive:', error);
-        alert('Articolo rimosso localmente, ma errore durante cancellazione su Drive. Riprova il salvataggio.');
-      }
-    }
+    // Mark for deletion on Drive (deferred until "Salva su Drive")
+    syncService.markItemDeleted(supplierId, itemId);
   }, [updateSuppliers]);
 
   const selectedSupplier = suppliers.find(s => s.id === selectedSupplierId);

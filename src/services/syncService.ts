@@ -7,6 +7,8 @@ const LAST_SYNC_KEY = 'product-spec-sheet-creator-last-sync';
 const PENDING_CHANGES_KEY = 'product-spec-sheet-creator-pending-changes';
 const DIRTY_HEADERS_KEY = 'product-spec-sheet-creator-dirty-headers';
 const DIRTY_ITEMS_KEY = 'product-spec-sheet-creator-dirty-items';
+const DELETED_SUPPLIERS_KEY = 'product-spec-sheet-creator-deleted-suppliers';
+const DELETED_ITEMS_KEY = 'product-spec-sheet-creator-deleted-items';
 
 export interface SyncStatus {
   isOnline: boolean;
@@ -25,6 +27,8 @@ class SyncService {
   };
   private dirtyHeaders: Set<string> = this.loadDirtyHeaders();
   private dirtyItems: Map<string, Set<string>> = this.loadDirtyItems();
+  private deletedSuppliers: Set<string> = this.loadDeletedSuppliers();
+  private deletedItems: Map<string, Set<string>> = this.loadDeletedItems();
 
   constructor() {
     window.addEventListener('online', this.handleOnline.bind(this));
@@ -130,14 +134,40 @@ class SyncService {
           supplierId: id,
           itemIds: Array.from(items)
         })));
+        console.log('🗑️ Deleted suppliers:', Array.from(this.deletedSuppliers));
+        console.log('🗑️ Deleted items:', Array.from(this.deletedItems.entries()).map(([id, items]) => ({
+          supplierId: id,
+          itemIds: Array.from(items)
+        })));
 
-        // Create copies for saving
+        // Create copies for saving/deleting
         const headersToCopy = new Set(this.dirtyHeaders);
         const itemsToCopy = new Map(this.dirtyItems);
+        const suppliersToDelete = new Set(this.deletedSuppliers);
+        const itemsToDelete = new Map(this.deletedItems);
 
         // Clear IMMEDIATELY to prevent accumulation
         this.clearDirtyHeaders();
         this.clearDirtyItems();
+        this.clearDeletedSuppliers();
+        this.clearDeletedItems();
+
+        // STEP 1: Process deletions FIRST
+        // Delete complete suppliers
+        for (const supplierId of suppliersToDelete) {
+          console.log(`🗑️ Deleting supplier ${supplierId} from Drive...`);
+          await googleDrive.deleteSupplierComplete(supplierId);
+        }
+
+        // Delete individual items
+        for (const [supplierId, itemIds] of itemsToDelete) {
+          for (const itemId of itemIds) {
+            console.log(`🗑️ Deleting item ${itemId} from supplier ${supplierId}...`);
+            await googleDrive.deleteSupplierItem(supplierId, itemId);
+          }
+        }
+
+        // STEP 2: Save modifications
 
         // Save modified headers
         for (const supplierId of headersToCopy) {
@@ -313,6 +343,77 @@ class SyncService {
     if (googleAuth.isUserSignedIn() && this.currentSyncStatus.isOnline) {
       await this.syncToCloud();
     }
+  }
+
+  // ==========================================
+  // DELETION TRACKING (Deferred)
+  // ==========================================
+
+  private loadDeletedSuppliers(): Set<string> {
+    try {
+      const saved = localStorage.getItem(DELETED_SUPPLIERS_KEY);
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  }
+
+  private loadDeletedItems(): Map<string, Set<string>> {
+    try {
+      const saved = localStorage.getItem(DELETED_ITEMS_KEY);
+      if (!saved) return new Map();
+
+      const parsed = JSON.parse(saved);
+      return new Map(Object.entries(parsed).map(([supplierId, itemIds]) => [
+        supplierId,
+        new Set(itemIds as string[])
+      ]));
+    } catch {
+      return new Map();
+    }
+  }
+
+  private saveDeletedSuppliers(): void {
+    localStorage.setItem(DELETED_SUPPLIERS_KEY, JSON.stringify(Array.from(this.deletedSuppliers)));
+  }
+
+  private saveDeletedItems(): void {
+    const obj = Object.fromEntries(
+      Array.from(this.deletedItems.entries()).map(([supplierId, itemIds]) => [
+        supplierId,
+        Array.from(itemIds)
+      ])
+    );
+    localStorage.setItem(DELETED_ITEMS_KEY, JSON.stringify(obj));
+  }
+
+  private clearDeletedSuppliers(): void {
+    this.deletedSuppliers.clear();
+    localStorage.removeItem(DELETED_SUPPLIERS_KEY);
+  }
+
+  private clearDeletedItems(): void {
+    this.deletedItems.clear();
+    localStorage.removeItem(DELETED_ITEMS_KEY);
+  }
+
+  markSupplierDeleted(supplierId: string): void {
+    console.log('🗑️ Marking supplier as deleted (deferred):', supplierId);
+    this.deletedSuppliers.add(supplierId);
+    this.saveDeletedSuppliers();
+    this.markPendingChanges();
+  }
+
+  markItemDeleted(supplierId: string, itemId: string): void {
+    console.log('🗑️ Marking item as deleted (deferred):', { supplierId, itemId });
+
+    if (!this.deletedItems.has(supplierId)) {
+      this.deletedItems.set(supplierId, new Set());
+    }
+
+    this.deletedItems.get(supplierId)!.add(itemId);
+    this.saveDeletedItems();
+    this.markPendingChanges();
   }
 }
 
