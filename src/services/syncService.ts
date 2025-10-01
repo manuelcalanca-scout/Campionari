@@ -74,6 +74,8 @@ class SyncService {
       if (changedSupplierId && changedItemId) {
         // Item-specific modification
         this.markItemDirty(changedSupplierId, changedItemId);
+        // ALSO mark header as dirty to save updated itemOrder array
+        this.markHeaderDirty(changedSupplierId);
       } else if (changedSupplierId) {
         // Header modification or supplier-wide operation
         this.markHeaderDirty(changedSupplierId);
